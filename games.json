@@ -1,6 +1,7 @@
 [
-  {"title":"Flugtbilen","folder":"flugtbilen","emoji":"🚓","icon":"icon.png","author":{"iv":"iTG5BakPRz76jDhj","data":"70eJ0kjhlHgb7PHitW5SifuHv/6a"},"color":"#d7262e"},
-  {"title":"Flyverhoppet","folder":"flyverhoppet","emoji":"🏎️","icon":"icon.png","author":{"iv":"yCupgK3b9AujXz8M","data":"Zx405Ttr30r0pvHc0/f4BTs4CDWA"},"color":"#3d8fe0"},
-  {"title":"Min By","folder":"min-by","emoji":"🏘️","icon":"icon.png","author":{"iv":"WX2ShbPSOAfQUr/f","data":"b2XYualeqhsXhquVS47HSN86GMV0Og=="},"color":"#5a9e4b"},
-  {"title":"Ballonner","folder":"ballonner","emoji":"🎈","author":{"iv":"YEpmb0+6FuYRJTs4","data":"UqawYeoLWuT/wC2lnK+8FtOdYQ=="},"color":"#e94e77","icon":"icon.png"}
+  {"title":"Min Ø","folder":"min-oe","emoji":"🏝️","icon":"icon.png","color":"#1ea7c9","author":{"iv":"wHYearMMPY52c3MS","data":"HcsPrvBhO6cQI6HpjIlc1nLBLOoI4w=="}},
+  {"title":"Flugtbilen","folder":"flugtbilen","emoji":"🚓","icon":"icon.png","author":{"iv":"w7/uUfWgnGQKRl9W","data":"5w9MWcJhhtR7KOS9CGFpTQy5wRN5"},"color":"#d7262e"},
+  {"title":"Flyverhoppet","folder":"flyverhoppet","emoji":"🏎️","icon":"icon.png","author":{"iv":"Tm5sQM8IRfbbttnn","data":"mUjv+/LseKTNg2+5YdSHCppnRtXa"},"color":"#3d8fe0"},
+  {"title":"Min By","folder":"min-by","emoji":"🏘️","icon":"icon.png","author":{"iv":"7eSvhzyIYWj34qRo","data":"9i8kmxDuBSpZTKqUmvzAsXx0n9SDMA=="},"color":"#5a9e4b"},
+  {"title":"Ballonner","folder":"ballonner","emoji":"🎈","author":{"iv":"42xFCs1xK3PrXvr2","data":"GN9DV7DLhn5/WUpD8tH9dFEaBg=="},"color":"#e94e77","icon":"icon.png"}
 ]

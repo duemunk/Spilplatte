@@ -189,6 +189,8 @@
     boing:      [{ wave: "sine",     from: 200, to: 600,  time: 0.3, wobble: 12 }],
     eksplosion: [{ wave: "noise",    time: 0.6 }],
     klik:       [{ wave: "square",   from: 1200, to: 1200, time: 0.03 }],
+    hammer:     [{ wave: "triangle", from: 180, to: 70, time: 0.07 }, { wave: "noise", time: 0.04 }, { wave: "triangle", from: 180, to: 70, time: 0.07, delay: 0.2 }, { wave: "noise", time: 0.04, delay: 0.2 }, { wave: "triangle", from: 180, to: 70, time: 0.07, delay: 0.4 }, { wave: "noise", time: 0.04, delay: 0.4 }],
+    sav:        [{ wave: "sawtooth", from: 220, to: 330, time: 0.16 }, { wave: "sawtooth", from: 330, to: 220, time: 0.16, delay: 0.17 }, { wave: "sawtooth", from: 220, to: 330, time: 0.16, delay: 0.34 }, { wave: "sawtooth", from: 330, to: 220, time: 0.16, delay: 0.51 }],
     sejr:       [{ wave: "square", from: 523, to: 523, time: 0.12 }, { wave: "square", from: 659, to: 659, time: 0.12, delay: 0.12 }, { wave: "square", from: 784, to: 784, time: 0.12, delay: 0.24 }, { wave: "square", from: 1046, to: 1046, time: 0.35, delay: 0.36 }],
     tab:        [{ wave: "triangle", from: 400, to: 380, time: 0.25 }, { wave: "triangle", from: 300, to: 280, time: 0.25, delay: 0.25 }, { wave: "triangle", from: 200, to: 120, time: 0.5, delay: 0.5 }]
   };

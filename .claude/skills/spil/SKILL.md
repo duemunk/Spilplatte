@@ -78,7 +78,8 @@ For a new game, these are the choices that can come up — use the ones that hel
    Set `"icon": "icon.png"` in `games.json` (keep `emoji` too, as a fallback).
 5. **Lyde** — pick sounds for the important moments (fx "når man får point", "når man taber").
    Ready-made sounds, used with `sfx("<name>")`: `pop`, `hop`, `mont` (Mønt), `laser`, `bump`,
-   `boing`, `eksplosion`, `klik`, `sejr`, `tab`. Let them listen right here in the chat: show
+   `boing`, `eksplosion`, `klik`, `hammer`, `sav`, `sejr`, `tab`. If none fits, make a new
+   one: add it to `SFX` in `shared/engine.js` and to `tools/sound-board.html` and `shared/lyde.html`. Let them listen right here in the chat: show
    the sound board with the visualize widget tool (`show_widget`, title `spilplatte_sound_board`)
    using the contents of `tools/sound-board.html` as the widget code. If that doesn't work for
    them, fall back to the sounds page in the in-app browser (see "Showing things to the kids" in
