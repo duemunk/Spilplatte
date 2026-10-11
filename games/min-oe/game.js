@@ -358,7 +358,7 @@ function drawVisitorArrows() {
     if (sx > 40 && sx < WIDTH - 40 && sy > 40 && sy < HEIGHT - 40) return;
     var angle = Math.atan2(sy - HEIGHT / 2, sx - WIDTH / 2);
     var ex = Math.max(60, Math.min(WIDTH - 60, sx));
-    var ey = Math.max(110, Math.min(HEIGHT - 120, sy));
+    var ey = Math.max(150, Math.min(HEIGHT - 130, sy));
     circle(ex, ey, 38, "rgba(255,255,255,0.9)");
     emoji(visitor.face, ex, ey, 40);
     ctx.save();

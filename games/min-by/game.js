@@ -85,6 +85,68 @@ var trees = [
   { x: 990, y: 640 }
 ];
 
+var BASE_PLOTS = plots;
+var BASE_TREES = trees;
+var ROAD_X = 482;
+var ROAD_Y = 380;
+var STEP_X = 560;
+var STEP_Y = 420;
+var GROW_BASE_PRICE_IN_KR = 80;
+var GROW_PRICE_STEP_IN_KR = 60;
+var cityLevel = 0;
+var camera = { x: 0, y: 0 };
+var bounds = { left: 0, top: 0, right: WIDTH, bottom: HEIGHT };
+
+function roadX(k) { return ROAD_X + k * STEP_X; }
+function roadY(k) { return ROAD_Y + k * STEP_Y; }
+
+function ringBlocks(level) {
+  var blocks = [];
+  for (var bx = -1 - level; bx <= level; bx++) {
+    for (var by = -1 - level; by <= level; by++) {
+      var inner = bx >= -level && bx <= level - 1 && by >= -level && by <= level - 1;
+      if (!inner) blocks.push({ left: roadX(bx) + 60, top: roadY(by) + 60 });
+    }
+  }
+  return blocks;
+}
+
+function setCitySize() {
+  bounds = cityLevel === 0
+    ? { left: 0, top: 0, right: WIDTH, bottom: HEIGHT }
+    : { left: roadX(-1 - cityLevel) + 40, top: roadY(-1 - cityLevel) + 40, right: roadX(cityLevel + 1) + 20, bottom: roadY(cityLevel + 1) + 20 };
+  trees = BASE_TREES.slice();
+  for (var level = 1; level <= cityLevel; level++) {
+    ringBlocks(level).forEach(function (block) {
+      trees.push({ x: block.left + 225, y: block.top + 40 });
+      trees.push({ x: block.left + 460, y: block.top + 330 });
+    });
+  }
+}
+
+function growPrice() {
+  return GROW_BASE_PRICE_IN_KR + cityLevel * GROW_PRICE_STEP_IN_KR;
+}
+
+function growCity() {
+  money -= growPrice();
+  cityLevel++;
+  var before = plots.length;
+  ringBlocks(cityLevel).forEach(function (block) {
+    plots.push({ x: block.left + 40, y: block.top + 110 });
+    plots.push({ x: block.left + 260, y: block.top + 110 });
+  });
+  setCitySize();
+  float("Byen blev større! +" + (plots.length - before) + " grunde 🎉", player.x, player.y - 70, "#fff");
+  sfx("hammer");
+  remember();
+}
+
+function townFloat(words, x, y, color) {
+  if (scene === "town") float(words, camera.x + x, camera.y + y, color);
+  else float(words, x, y, color);
+}
+
 var player = { x: 512, y: 410, targetX: 512, targetY: 410 };
 var money = 0;
 var shops = [];
@@ -109,7 +171,10 @@ function setup() {
     money = saved.money;
     shops = saved.shops;
     food = saved.food || 0;
+    cityLevel = saved.cityLevel || 0;
+    plots = saved.plots || BASE_PLOTS;
   }
+  setCitySize();
   shops.forEach(function (shop) {
     shop.customer = null;
     shop.wait = random(2, 5);
@@ -128,6 +193,8 @@ function remember() {
   save("state", {
     money: money,
     food: food,
+    cityLevel: cityLevel,
+    plots: plots,
     shops: shops.map(function (shop) {
       if (shop.type !== "hus") return { plot: shop.plot, type: shop.type };
       return { plot: shop.plot, type: shop.type, rooms: shop.rooms, pets: shop.pets };
@@ -150,8 +217,8 @@ function shopOnPlot(index) {
 
 function addCoin() {
   for (var tries = 0; tries < 20; tries++) {
-    var x = random(40, WIDTH - 40);
-    var y = random(110, HEIGHT - 40);
+    var x = random(bounds.left + 40, bounds.right - 40);
+    var y = random(Math.max(bounds.top, cityLevel === 0 ? 110 : bounds.top) + 40, bounds.bottom - 40);
     if (plotAt(x, y) === -1) { coins.push({ x: x, y: y }); return; }
   }
 }
@@ -183,6 +250,8 @@ function allPets() {
   return pets;
 }
 
+var PET_MEALS = { hund: "et kødben 🍖", kat: "en fisk 🐟", kanin: "en gulerod 🥕", hamster: "en nød 🌰", hest: "et æble 🍎", fisk: "fiskefoder 🐠" };
+
 function feed(pets) {
   var hungry = pets.filter(function (pet) { return pet.hunger >= HUNGRY_AT; });
   var name = PETS[pets[0].kind].name.toLowerCase();
@@ -190,7 +259,7 @@ function feed(pets) {
   if (food === 0) { say("Køb dyremad i Købmanden 🛒"); sfx("bump"); return; }
   food--;
   hungry.forEach(function (pet) { pet.hunger = 0; });
-  say("Nam nam! Din " + name + " er glad ❤️");
+  say("Nam nam! Din " + name + " fik " + PET_MEALS[pets[0].kind] + " ❤️");
   sfx("sejr");
   remember();
 }
@@ -273,6 +342,10 @@ function update(dt) {
 
   walk(dt);
   followPets(dt);
+  if (cityLevel > 0) {
+    camera.x = Math.max(bounds.left, Math.min(bounds.right - WIDTH, player.x - WIDTH / 2));
+    camera.y = Math.max(bounds.top, Math.min(bounds.bottom - HEIGHT, player.y - HEIGHT / 2));
+  }
 
   for (var i = coins.length - 1; i >= 0; i--) {
     if (distance(player.x, player.y, coins[i].x, coins[i].y) < 40) {
@@ -287,7 +360,7 @@ function update(dt) {
   coinTimer += dt;
   if (coinTimer > COIN_INTERVAL_IN_SECONDS) {
     coinTimer = 0;
-    if (coins.length < MAX_COINS) addCoin();
+    if (coins.length < MAX_COINS + cityLevel * 6) addCoin();
   }
 
   shops.forEach(function (shop) {
@@ -304,13 +377,58 @@ function update(dt) {
   });
 }
 
+function visibleBox(x, y, w, h) {
+  return x + w > camera.x && x < camera.x + WIDTH && y + h > camera.y && y < camera.y + HEIGHT;
+}
+
 function drawWorld() {
   clear(theme.grass);
-  box(0, 380, WIDTH, 60, theme.road);
-  box(482, 70, 60, HEIGHT - 70, theme.road);
-  for (var x = 10; x < WIDTH; x += 60) if (x < 470 || x > 545) box(x, 407, 30, 6, theme.line);
-  for (var y = 80; y < HEIGHT; y += 60) if (y < 370 || y > 445) box(509, y, 6, 30, theme.line);
-  trees.forEach(function (tree) { emoji("🌳", tree.x, tree.y, 64); });
+  ctx.save();
+  ctx.translate(-Math.round(camera.x), -Math.round(camera.y));
+  var top = cityLevel === 0 ? 70 : bounds.top;
+  for (var k = -cityLevel; k <= cityLevel; k++) {
+    box(bounds.left, roadY(k), bounds.right - bounds.left, 60, theme.road);
+    box(roadX(k), top, 60, bounds.bottom - top, theme.road);
+  }
+  for (var j = -cityLevel; j <= cityLevel; j++) {
+    for (var x = bounds.left + 10; x < bounds.right; x += 60) {
+      var nearCross = false;
+      for (var c = -cityLevel; c <= cityLevel; c++) if (x > roadX(c) - 15 && x < roadX(c) + 65) nearCross = true;
+      if (!nearCross && visibleBox(x, roadY(j) + 27, 30, 6)) box(x, roadY(j) + 27, 30, 6, theme.line);
+    }
+    for (var y = top + 10; y < bounds.bottom; y += 60) {
+      var crossing = false;
+      for (var r = -cityLevel; r <= cityLevel; r++) if (y > roadY(r) - 15 && y < roadY(r) + 65) crossing = true;
+      if (!crossing && visibleBox(roadX(j) + 27, y, 6, 30)) box(roadX(j) + 27, y, 6, 30, theme.line);
+    }
+  }
+  trees.forEach(function (tree) { if (visibleBox(tree.x - 40, tree.y - 40, 80, 80)) emoji("🌳", tree.x, tree.y, 64); });
+}
+
+function drawCustomerArrows() {
+  shops.forEach(function (shop) {
+    if (!shop.customer) return;
+    var plot = plots[shop.plot];
+    var sx = plot.x + PLOT_WIDTH / 2 - camera.x;
+    var sy = plot.y + PLOT_HEIGHT + 30 - camera.y;
+    if (sx > 40 && sx < WIDTH - 40 && sy > 40 && sy < HEIGHT - 40) return;
+    var angle = Math.atan2(sy - HEIGHT / 2, sx - WIDTH / 2);
+    var ex = Math.max(60, Math.min(WIDTH - 60, sx));
+    var ey = Math.max(150, Math.min(HEIGHT - 130, sy));
+    circle(ex, ey, 38, "rgba(255,255,255,0.9)");
+    emoji(shop.customer.face, ex, ey, 40);
+    ctx.save();
+    ctx.translate(ex + Math.cos(angle) * 46, ey + Math.sin(angle) * 46);
+    ctx.rotate(angle);
+    ctx.fillStyle = "#ff6b6b";
+    ctx.beginPath();
+    ctx.moveTo(18, 0);
+    ctx.lineTo(-10, -14);
+    ctx.lineTo(-10, 14);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  });
 }
 
 function drawPlot(plot, index) {
@@ -492,13 +610,18 @@ function draw() {
   drawSpeech(player.x, player.y);
   shops.forEach(function (shop) { if (shop.customer) drawCustomer(shop); });
   floaters.forEach(function (f) { text(f.words, f.x, f.y, 28, f.color); });
+  ctx.restore();
+  drawCustomerArrows();
   box(WIDTH - 230, 12, 210, 56, "rgba(0,0,0,0.35)");
   text("💰 " + money + " kr", WIDTH - 125, 40, 32);
+  var canGrow = money >= growPrice();
+  box(WIDTH - 262, HEIGHT - 92, 250, 76, canGrow ? "#2f9e44" : "rgba(0,0,0,0.35)");
+  text("🛣️ Større by · " + growPrice() + " kr", WIDTH - 137, HEIGHT - 54, 22, canGrow ? "#fff" : "#ddd");
   if (menu) drawMenu();
 }
 
 function buy(priceInKr) {
-  if (money < priceInKr) { sfx("bump"); float("Du mangler " + (priceInKr - money) + " kr", WIDTH / 2, 610, "#fff"); return false; }
+  if (money < priceInKr) { sfx("bump"); townFloat("Du mangler " + (priceInKr - money) + " kr", WIDTH / 2, 610, "#fff"); return false; }
   money -= priceInKr;
   return true;
 }
@@ -558,7 +681,7 @@ function tapMenu(x, y) {
         menu = null;
       } else {
         sfx("bump");
-        float("Nej, det var ikke det 😅", WIDTH / 2, 600, "#fff");
+        townFloat("Nej, det var ikke det 😅", WIDTH / 2, 600, "#fff");
       }
     }
   });
@@ -666,6 +789,13 @@ function onRelease() {
 function onTap(x, y) {
   if (menu) { tapMenu(x, y); return; }
   if (scene === "inside") { tapInside(x, y); return; }
+  if (x > WIDTH - 262 && y > HEIGHT - 92) {
+    if (money >= growPrice()) growCity();
+    else { sfx("bump"); townFloat("Du mangler " + (growPrice() - money) + " kr", WIDTH / 2, 600, "#fff"); }
+    return;
+  }
+  x += camera.x;
+  y += camera.y;
 
   var pet = petAt(x, y);
   if (pet) { feed([pet.pet]); float("❤️", pet.x, pet.y - 40, "#fff"); return; }
@@ -688,6 +818,6 @@ function onTap(x, y) {
     if (onPlot.customer) { menu = { kind: "sell", shop: onPlot }; return; }
   }
 
-  player.targetX = x;
-  player.targetY = Math.max(90, y);
+  player.targetX = Math.max(bounds.left + 30, Math.min(bounds.right - 30, x));
+  player.targetY = Math.max(cityLevel === 0 ? 90 : bounds.top + 30, Math.min(bounds.bottom - 30, y));
 }
