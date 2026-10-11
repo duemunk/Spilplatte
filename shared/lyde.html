@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="da">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Lyde</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .sounds { display: flex; flex-wrap: wrap; justify-content: center; }
+    .sounds button {
+      font-size: 28px; font-weight: bold; color: #fff; background: #e94e77; border: 0;
+      border-radius: 24px; margin: 10px; padding: 24px 32px; box-shadow: 0 6px 0 rgba(0,0,0,.3);
+    }
+  </style>
+</head>
+<body class="launcher">
+  <h1>🔊 Lyde</h1>
+  <p class="subtitle">Tryk og hør!</p>
+  <div id="sounds" class="sounds"></div>
+  <script>window.SOUND_PREVIEW = true;</script>
+  <script src="engine.js"></script>
+  <script>
+    var labels = { pop: "Pop 🎈", hop: "Hop 🐸", mont: "Mønt 🪙", laser: "Laser 🔫", bump: "Bump 🧱",
+      boing: "Boing 🦘", eksplosion: "Eksplosion 💥", klik: "Klik 👆", sejr: "Sejr 🏆", tab: "Tab 😢" };
+    SFX_NAMES.forEach(function (name) {
+      var button = document.createElement("button");
+      button.textContent = labels[name] || name;
+      button.addEventListener("touchstart", play);
+      button.addEventListener("mousedown", play);
+      function play(event) {
+        event.preventDefault();
+        startAudio();
+        sfx(name);
+      }
+      document.getElementById("sounds").appendChild(button);
+    });
+  </script>
+</body>
+</html>

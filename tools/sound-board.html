@@ -1,0 +1,64 @@
+<h2 class="sr-only">Lydknapper fra Spilplatte, tryk for at høre hver lyd</h2>
+<div id="board" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; padding: 1rem 0;"></div>
+<script>
+var SFX = {
+  pop: [{ wave: "square", from: 900, to: 300, time: 0.08 }],
+  hop: [{ wave: "square", from: 300, to: 800, time: 0.15 }],
+  mont: [{ wave: "square", from: 990, to: 990, time: 0.06 }, { wave: "square", from: 1320, to: 1320, time: 0.2, delay: 0.06 }],
+  laser: [{ wave: "sawtooth", from: 1500, to: 200, time: 0.2 }],
+  bump: [{ wave: "triangle", from: 150, to: 60, time: 0.15 }],
+  boing: [{ wave: "sine", from: 200, to: 600, time: 0.3, wobble: 12 }],
+  eksplosion: [{ wave: "noise", time: 0.6 }],
+  klik: [{ wave: "square", from: 1200, to: 1200, time: 0.03 }],
+  sejr: [{ wave: "square", from: 523, to: 523, time: 0.12 }, { wave: "square", from: 659, to: 659, time: 0.12, delay: 0.12 }, { wave: "square", from: 784, to: 784, time: 0.12, delay: 0.24 }, { wave: "square", from: 1046, to: 1046, time: 0.35, delay: 0.36 }],
+  tab: [{ wave: "triangle", from: 400, to: 380, time: 0.25 }, { wave: "triangle", from: 300, to: 280, time: 0.25, delay: 0.25 }, { wave: "triangle", from: 200, to: 120, time: 0.5, delay: 0.5 }]
+};
+var LABELS = { pop: "🎈 Pop", hop: "🐸 Hop", mont: "🪙 Mønt", laser: "🔫 Laser", bump: "🧱 Bump", boing: "🦘 Boing", eksplosion: "💥 Eksplosion", klik: "👆 Klik", sejr: "🏆 Sejr", tab: "😢 Tab" };
+var COLORS = { pop: "#e94e77", hop: "#2f9e44", mont: "#d4a017", laser: "#7048e8", bump: "#c05621", boing: "#1c7ed6", eksplosion: "#e03131", klik: "#0c8599", sejr: "#f08c00", tab: "#5f3dc4" };
+var audio = null;
+function tone(part) {
+  var t = audio.currentTime + (part.delay || 0);
+  var gain = audio.createGain();
+  gain.gain.setValueAtTime(0.25, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + part.time);
+  gain.connect(audio.destination);
+  var source;
+  if (part.wave === "noise") {
+    var buffer = audio.createBuffer(1, audio.sampleRate, audio.sampleRate);
+    var data = buffer.getChannelData(0);
+    for (var i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    source = audio.createBufferSource();
+    source.buffer = buffer;
+  } else {
+    source = audio.createOscillator();
+    source.type = part.wave;
+    source.frequency.setValueAtTime(part.from, t);
+    source.frequency.exponentialRampToValueAtTime(part.to, t + part.time);
+    if (part.wobble) {
+      var lfo = audio.createOscillator();
+      var depth = audio.createGain();
+      lfo.frequency.value = part.wobble;
+      depth.gain.value = 40;
+      lfo.connect(depth); depth.connect(source.frequency);
+      lfo.start(t); lfo.stop(t + part.time);
+    }
+  }
+  source.connect(gain);
+  source.start(t);
+  source.stop(t + part.time);
+}
+Object.keys(SFX).forEach(function (name) {
+  var button = document.createElement("button");
+  button.textContent = LABELS[name];
+  button.style.cssText = "min-height: 72px; font-size: 20px; font-weight: 500; color: #fff; background: " + COLORS[name] + "; border: 0; border-radius: 16px; box-shadow: 0 5px 0 rgba(0,0,0,0.25); cursor: pointer;";
+  button.addEventListener("pointerdown", function () { button.style.transform = "translateY(4px)"; button.style.boxShadow = "0 1px 0 rgba(0,0,0,0.25)"; });
+  button.addEventListener("pointerup", function () { button.style.transform = ""; button.style.boxShadow = "0 5px 0 rgba(0,0,0,0.25)"; });
+  button.addEventListener("pointerleave", function () { button.style.transform = ""; button.style.boxShadow = "0 5px 0 rgba(0,0,0,0.25)"; });
+  button.addEventListener("click", function () {
+    if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
+    if (audio.state === "suspended") audio.resume();
+    SFX[name].forEach(tone);
+  });
+  document.getElementById("board").appendChild(button);
+});
+</script>

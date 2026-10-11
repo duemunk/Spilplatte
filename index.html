@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="da">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Spilplatte">
+  <link rel="apple-touch-icon" href="shared/icons/icon-180.png">
+  <link rel="apple-touch-icon" sizes="152x152" href="shared/icons/icon-152.png">
+  <link rel="apple-touch-icon" sizes="167x167" href="shared/icons/icon-167.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="shared/icons/icon-180.png">
+  <link rel="icon" type="image/png" href="shared/icons/icon-192.png">
+  <meta name="theme-color" content="#1d1f33">
+  <link rel="manifest" href="manifest.json">
+  <title>Spilplatte</title>
+  <script>document.write('<link rel="stylesheet" href="shared/style.css?v=' + Date.now() + '">');</script>
+</head>
+<body class="launcher">
+  <button id="refresh" class="refresh">🔄 Hent nye spil</button>
+  <button id="unlock" class="refresh unlock">🔑 Kode</button>
+  <div id="code-panel" class="code-panel">
+    <input id="code" type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="6 cifre" autocomplete="off">
+    <button id="code-ok">Lås op</button>
+    <p id="code-message"></p>
+  </div>
+  <h1><img class="logo" src="shared/icons/icon-180.png" alt="">Spilplatte</h1>
+  <p class="subtitle">Vælg et spil og tryk!</p>
+  <div id="tiles" class="tiles"></div>
+  <script>
+    // Author names are encrypted in games.json (see tools/seal.mjs). With the 6-digit code the
+    // key is derived once and remembered on this device; without it the tiles show no names.
+    var KEY_STORAGE = "spilplatte-names-key";
+    var games = [];
+    var seal = null;
+
+    function fromBase64(text) {
+      var raw = atob(text);
+      var bytes = new Uint8Array(raw.length);
+      for (var i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+      return bytes;
+    }
+
+    function toBase64(buffer) {
+      var bytes = new Uint8Array(buffer);
+      var raw = "";
+      for (var i = 0; i < bytes.length; i++) raw += String.fromCharCode(bytes[i]);
+      return btoa(raw);
+    }
+
+    function storedKey() {
+      try { return localStorage.getItem(KEY_STORAGE); } catch (e) { return null; }
+    }
+
+    function importKey(bits) {
+      return crypto.subtle.importKey("raw", bits, { name: "AES-GCM" }, false, ["decrypt"]);
+    }
+
+    function decrypt(key, sealed) {
+      return crypto.subtle.decrypt({ name: "AES-GCM", iv: fromBase64(sealed.iv) }, key, fromBase64(sealed.data))
+        .then(function (plain) { return new TextDecoder().decode(plain); });
+    }
+
+    function deriveBits(code) {
+      return crypto.subtle.importKey("raw", new TextEncoder().encode(code), { name: "PBKDF2" }, false, ["deriveBits"])
+        .then(function (base) {
+          return crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: fromBase64(seal.salt), iterations: seal.iterations }, base, 256);
+        });
+    }
+
+    function showNames() {
+      var saved = storedKey();
+      document.getElementById("unlock").textContent = saved ? "🔓 Navne vises" : "🔑 Kode";
+      if (!saved || !window.crypto || !crypto.subtle) return;
+      importKey(fromBase64(saved)).then(function (key) {
+        games.forEach(function (game) {
+          if (!game.author || !game.author.data) return;
+          decrypt(key, game.author).then(function (name) {
+            game.element.querySelector(".author").textContent = "af " + name;
+          }).catch(function () {});
+        });
+      });
+    }
+
+    function render() {
+      var tiles = document.getElementById("tiles");
+      games.forEach(function (game) {
+        var a = document.createElement("a");
+        a.className = "tile";
+        a.href = "games/" + game.folder + "/?v=" + Date.now();
+        a.style.background = game.color || "#4a90e2";
+        var art = game.icon
+          ? '<img class="icon" src="games/' + game.folder + "/" + game.icon + '" alt="">'
+          : '<span class="emoji">' + game.emoji + "</span>";
+        a.innerHTML = art + '<span class="title">' + game.title + '</span><span class="author"></span>';
+        a.addEventListener("click", function (event) {
+          event.preventDefault();
+          location.href = a.href;
+        });
+        game.element = a;
+        tiles.appendChild(a);
+      });
+      showNames();
+    }
+
+    function getJson(url, done) {
+      var request = new XMLHttpRequest();
+      request.open("GET", url + "?" + Date.now());
+      request.onload = function () { try { done(JSON.parse(request.responseText)); } catch (e) { done(null); } };
+      request.onerror = function () { done(null); };
+      request.send();
+    }
+
+    getJson("shared/seal.json", function (result) {
+      seal = result;
+      getJson("games.json", function (list) {
+        games = list || [];
+        render();
+      });
+    });
+
+    var panel = document.getElementById("code-panel");
+    var input = document.getElementById("code");
+    var message = document.getElementById("code-message");
+    document.getElementById("unlock").addEventListener("click", function () {
+      if (storedKey()) {
+        if (confirm("Skjul navnene igen på denne iPad?")) {
+          try { localStorage.removeItem(KEY_STORAGE); } catch (e) {}
+          location.reload();
+        }
+        return;
+      }
+      panel.style.display = panel.style.display === "block" ? "none" : "block";
+      message.textContent = "";
+      if (panel.style.display === "block") input.focus();
+    });
+    document.getElementById("code-ok").addEventListener("click", function () {
+      var code = input.value.replace(/[^0-9]/g, "");
+      if (code.length !== 6) { message.textContent = "Koden har 6 cifre"; return; }
+      if (!seal || !window.crypto || !crypto.subtle) { message.textContent = "Det virker ikke på denne enhed"; return; }
+      message.textContent = "Tjekker…";
+      var bits;
+      deriveBits(code).then(function (result) {
+        bits = result;
+        return importKey(bits);
+      }).then(function (key) {
+        return decrypt(key, seal.check);
+      }).then(function (check) {
+        if (check !== "spilplatte") throw new Error("wrong");
+        try { localStorage.setItem(KEY_STORAGE, toBase64(bits)); } catch (e) {}
+        panel.style.display = "none";
+        input.value = "";
+        showNames();
+      }).catch(function () {
+        message.textContent = "Forkert kode";
+      });
+    });
+
+    // The home-screen app has no reload button, so offer one, and reload by itself after
+    // the app has been in the background for a while.
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("sw.js").then(function (registration) {
+        var worker = registration.active || registration.waiting || registration.installing;
+        if (worker && navigator.onLine) worker.postMessage("refresh");
+      }).catch(function () {});
+    }
+
+    function reloadFresh() { location.replace("./?v=" + Date.now()); }
+    document.getElementById("refresh").addEventListener("click", reloadFresh);
+    var hiddenAt = 0;
+    document.addEventListener("visibilitychange", function () {
+      if (document.hidden) { hiddenAt = Date.now(); return; }
+      if (hiddenAt && Date.now() - hiddenAt > 5 * 60 * 1000) reloadFresh();
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+{
+  "private": true,
+  "scripts": {
+    "check": "es-check es2017 'shared/**/*.js' 'games/**/*.js'"
+  },
+  "devDependencies": {
+    "es-check": "^7.2.1"
+  }
+}

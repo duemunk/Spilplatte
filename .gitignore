@@ -1,0 +1,6 @@
+node_modules/
+.DS_Store
+.claude/last-message-time
+
+# Real names and the unlock code never leave this Mac
+private/

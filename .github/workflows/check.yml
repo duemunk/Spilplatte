@@ -1,0 +1,8 @@
+name: iOS 12 check
+on: [push, pull_request]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npx --yes es-check@7 es2017 sw.js 'shared/**/*.js' 'games/**/*.js'
