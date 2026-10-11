@@ -3,6 +3,10 @@ useFont("rund");
 var theme = { sea: "#1ea7c9", sand: "#f5e1a4", grass: "#8fd16a", text: "#fff" };
 
 var ISLAND = { x: 512, y: 384, sandX: 422, sandY: 314, grassX: 362, grassY: 264 };
+var GROW_X = 190;
+var GROW_Y = 150;
+var GROW_BASE_PRICE_IN_KR = 80;
+var GROW_PRICE_STEP_IN_KR = 60;
 var PLAYER_SPEED = 300;
 var VISITOR_SPEED = 150;
 var COIN_VALUE_IN_KR = 2;
@@ -63,7 +67,10 @@ var SICK_ANIMALS = ["🐶", "🐱", "🐰", "🐹", "🐦", "🐢"];
 var plots = [
   { x: 240, y: 215 }, { x: 437, y: 175 }, { x: 634, y: 215 }, { x: 330, y: 420 }, { x: 560, y: 420 }
 ];
-var palms = [
+var BASE_PLOTS = plots;
+var islandLevel = 0;
+var camera = { x: 0, y: 0 };
+var BASE_PALMS = [
   { x: 175, y: 410 }, { x: 225, y: 210 }, { x: 860, y: 380 }, { x: 815, y: 180 }, { x: 520, y: 600 },
   { x: 330, y: 590 }, { x: 735, y: 590 }, { x: 512, y: 130 }
 ];
@@ -84,9 +91,69 @@ var dragging = null;
 var pendingAction = null;
 var cooking = 0;
 
+var palms = BASE_PALMS;
+
+function setIslandSize() {
+  ISLAND.grassX = 362 + islandLevel * GROW_X;
+  ISLAND.grassY = 264 + islandLevel * GROW_Y;
+  ISLAND.sandX = ISLAND.grassX + 60;
+  ISLAND.sandY = ISLAND.grassY + 50;
+  PIER.y = ISLAND.y + ISLAND.sandY - 15;
+  palms = islandLevel === 0 ? BASE_PALMS : [];
+  if (islandLevel > 0) {
+    var count = 10 + islandLevel * 6;
+    for (var i = 0; i < count; i++) {
+      var angle = i / count * Math.PI * 2;
+      var x = ISLAND.x + Math.cos(angle) * (ISLAND.grassX - 30);
+      var y = ISLAND.y + Math.sin(angle) * (ISLAND.grassY - 30);
+      if (Math.abs(x - PIER.x) < 90 && y > ISLAND.y) continue;
+      palms.push({ x: x, y: y });
+    }
+  }
+}
+
+function growPrice() {
+  return GROW_BASE_PRICE_IN_KR + islandLevel * GROW_PRICE_STEP_IN_KR;
+}
+
+function plotFits(x, y) {
+  var corners = [[x, y], [x + PLOT_WIDTH, y], [x, y + PLOT_HEIGHT + 60], [x + PLOT_WIDTH, y + PLOT_HEIGHT + 60]];
+  var inside = corners.every(function (c) { return onIsland(c[0], c[1], ISLAND.grassX * 0.94, ISLAND.grassY * 0.94); });
+  if (!inside) return false;
+  if (Math.abs(x + PLOT_WIDTH / 2 - PIER.x) < 130 && y + PLOT_HEIGHT > ISLAND.y + ISLAND.grassY - 220) return false;
+  return !plots.some(function (p) {
+    return x < p.x + PLOT_WIDTH + 40 && x + PLOT_WIDTH + 40 > p.x && y < p.y + PLOT_HEIGHT + 60 && y + PLOT_HEIGHT + 60 > p.y;
+  });
+}
+
+function addPlots() {
+  for (var y = ISLAND.y - ISLAND.grassY; y < ISLAND.y + ISLAND.grassY; y += 45) {
+    for (var x = ISLAND.x - ISLAND.grassX; x < ISLAND.x + ISLAND.grassX; x += 45) {
+      if (plotFits(x, y)) plots.push({ x: Math.round(x), y: Math.round(y) });
+    }
+  }
+}
+
+function growIsland() {
+  money -= growPrice();
+  islandLevel++;
+  setIslandSize();
+  var before = plots.length;
+  addPlots();
+  float("Øen blev større! +" + (plots.length - before) + " grunde 🎉", player.x, player.y - 70, "#fff");
+  sfx("hammer");
+  remember();
+}
+
 function setup() {
   var saved = load("state", null);
-  if (saved) { money = saved.money; buildings = saved.buildings; }
+  if (saved) {
+    money = saved.money;
+    buildings = saved.buildings;
+    islandLevel = saved.islandLevel || 0;
+    plots = saved.plots || BASE_PLOTS;
+  }
+  setIslandSize();
   buildings.forEach(function (building) {
     building.wait = random(3, 7);
     if (building.type === "hus") building.furniture = building.furniture || [];
@@ -97,6 +164,8 @@ function setup() {
 function remember() {
   save("state", {
     money: money,
+    islandLevel: islandLevel,
+    plots: plots,
     buildings: buildings.map(function (b) {
       return b.type === "hus" ? { plot: b.plot, type: b.type, furniture: b.furniture } : { plot: b.plot, type: b.type };
     })
@@ -129,8 +198,8 @@ function visitorAt(building) {
 
 function addCoin() {
   for (var tries = 0; tries < 30; tries++) {
-    var x = random(150, 874);
-    var y = random(110, 660);
+    var x = random(ISLAND.x - ISLAND.sandX, ISLAND.x + ISLAND.sandX);
+    var y = random(ISLAND.y - ISLAND.sandY, ISLAND.y + ISLAND.sandY);
     if (onIsland(x, y, ISLAND.sandX - 30, ISLAND.sandY - 30) && plotAt(x, y) === -1) { coins.push({ x: x, y: y }); return; }
   }
 }
@@ -181,7 +250,11 @@ function update(dt) {
     }
   }
   coinTimer += dt;
-  if (coinTimer > COIN_INTERVAL_IN_SECONDS) { coinTimer = 0; if (coins.length < MAX_COINS) addCoin(); }
+  if (coinTimer > COIN_INTERVAL_IN_SECONDS) { coinTimer = 0; if (coins.length < MAX_COINS + islandLevel * 4) addCoin(); }
+  var spanX = ISLAND.sandX + 150 - WIDTH / 2;
+  var spanY = ISLAND.sandY + 150 - HEIGHT / 2;
+  camera.x = spanX > 0 ? Math.max(-spanX, Math.min(spanX, player.x - ISLAND.x)) : 0;
+  camera.y = spanY > 0 ? Math.max(-spanY, Math.min(spanY, player.y - ISLAND.y)) : 0;
 
   buildings.forEach(function (building) {
     if (building.type === "hus" || visitorAt(building)) return;
@@ -192,7 +265,7 @@ function update(dt) {
       face: VISITOR_FACES[Math.floor(Math.random() * VISITOR_FACES.length)],
       animal: SICK_ANIMALS[Math.floor(Math.random() * SICK_ANIMALS.length)],
       item: type.items[Math.floor(Math.random() * type.items.length)],
-      building: building, state: "walking", x: PIER.x, y: PIER.y
+      building: building, state: "walking", x: PIER.x, y: PIER.y - 50
     });
     sfx("klik");
   });
@@ -262,13 +335,44 @@ function oval(x, y, radiusX, radiusY, color) {
 
 function drawIsland() {
   clear(theme.sea);
-  for (var w = 0; w < 14; w++) box((w * 173) % 1000, (w * 311) % 740, 50, 5, "rgba(255,255,255,0.25)");
+  for (var w = 0; w < 14; w++) {
+    var wx = (((w * 173) - camera.x * 0.5) % 1000 + 1000) % 1000;
+    var wy = (((w * 311) - camera.y * 0.5) % 740 + 740) % 740;
+    box(wx, wy, 50, 5, "rgba(255,255,255,0.25)");
+  }
+  ctx.save();
+  ctx.translate(-Math.round(camera.x), -Math.round(camera.y));
   oval(ISLAND.x, ISLAND.y, ISLAND.sandX, ISLAND.sandY, theme.sand);
   oval(ISLAND.x, ISLAND.y, ISLAND.grassX, ISLAND.grassY, theme.grass);
-  box(PIER.x - 30, 650, 60, 118, "#a0703c");
-  for (var plank = 655; plank < 768; plank += 18) box(PIER.x - 30, plank, 60, 3, "#7c5228");
-  emoji("⛵", PIER.x + 80, 735 + Math.sin(Date.now() / 700) * 4, 60);
+  box(PIER.x - 30, PIER.y - 55, 60, 120, "#a0703c");
+  for (var plank = PIER.y - 50; plank < PIER.y + 65; plank += 18) box(PIER.x - 30, plank, 60, 3, "#7c5228");
+  emoji("⛵", PIER.x + 80, PIER.y + 30 + Math.sin(Date.now() / 700) * 4, 60);
   palms.forEach(function (palm) { emoji("🌴", palm.x, palm.y, 60); });
+}
+
+function drawVisitorArrows() {
+  visitors.forEach(function (visitor) {
+    if (visitor.state !== "waiting") return;
+    var sx = visitor.x - camera.x;
+    var sy = visitor.y - camera.y;
+    if (sx > 40 && sx < WIDTH - 40 && sy > 40 && sy < HEIGHT - 40) return;
+    var angle = Math.atan2(sy - HEIGHT / 2, sx - WIDTH / 2);
+    var ex = Math.max(60, Math.min(WIDTH - 60, sx));
+    var ey = Math.max(110, Math.min(HEIGHT - 120, sy));
+    circle(ex, ey, 38, "rgba(255,255,255,0.9)");
+    emoji(visitor.face, ex, ey, 40);
+    ctx.save();
+    ctx.translate(ex + Math.cos(angle) * 46, ey + Math.sin(angle) * 46);
+    ctx.rotate(angle);
+    ctx.fillStyle = "#ff6b6b";
+    ctx.beginPath();
+    ctx.moveTo(18, 0);
+    ctx.lineTo(-10, -14);
+    ctx.lineTo(-10, 14);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  });
 }
 
 function drawPlot(plot, index) {
@@ -417,11 +521,16 @@ function draw() {
   emoji("👧", player.x, player.y, 60);
   drawSpeech(player.x, player.y);
   floaters.forEach(function (f) { text(f.words, f.x, f.y, 26, f.color); });
+  ctx.restore();
+  drawVisitorArrows();
   box(WIDTH - 230, 12, 210, 56, "rgba(0,0,0,0.3)");
   text("💰 " + money + " kr", WIDTH - 125, 40, 30);
+  var canGrow = money >= growPrice();
+  box(WIDTH - 262, HEIGHT - 92, 250, 76, canGrow ? "#2f9e44" : "rgba(0,0,0,0.35)");
+  text("🏝️ Større ø · " + growPrice() + " kr", WIDTH - 137, HEIGHT - 54, 22, canGrow ? "#fff" : "#ddd");
   if (buildings.length === 0 && !menu) {
-    box(212, 700, 600, 50, "rgba(0,0,0,0.35)");
-    text("👆 Gå rundt og saml mønter · tryk på 🚧 for at bygge", WIDTH / 2, 725, 21);
+    box(16, 700, 600, 50, "rgba(0,0,0,0.35)");
+    text("👆 Gå rundt og saml mønter · tryk på 🚧 for at bygge", 316, 725, 21);
   }
   if (menu) drawMenu();
 }
@@ -451,7 +560,7 @@ function tapMenu(x, y) {
     BUILD_ORDER.forEach(function (key, i) {
       if (Math.abs(x - choiceX(i, BUILD_ORDER.length)) > 78 || y < 290 || y > 510) return;
       var type = BUILDINGS[key];
-      if (money < type.priceInKr) { sfx("bump"); float("Du mangler " + (type.priceInKr - money) + " kr", WIDTH / 2, 580, "#c53030"); return; }
+      if (money < type.priceInKr) { sfx("bump"); float("Du mangler " + (type.priceInKr - money) + " kr", camera.x + WIDTH / 2, camera.y + 580, "#c53030"); return; }
       money -= type.priceInKr;
       var built = { plot: menu.plot, type: key, wait: random(3, 6) };
       if (key === "hus") built.furniture = [];
@@ -478,7 +587,7 @@ function tapMenu(x, y) {
       menu = null;
     } else {
       sfx("bump");
-      float("Nej, det var ikke det 😅", WIDTH / 2, 570, "#c53030");
+      float("Nej, det var ikke det 😅", camera.x + WIDTH / 2, camera.y + 570, "#c53030");
     }
   });
 }
@@ -537,6 +646,13 @@ function onRelease() {
 function onTap(x, y) {
   if (menu) { tapMenu(x, y); return; }
   if (scene === "inside") { tapInside(x, y); return; }
+  if (x > WIDTH - 262 && y > HEIGHT - 92) {
+    if (money >= growPrice()) growIsland();
+    else { sfx("bump"); float("Du mangler " + (growPrice() - money) + " kr", player.x, player.y - 70, "#c53030"); }
+    return;
+  }
+  x += camera.x;
+  y += camera.y;
   for (var i = 0; i < visitors.length; i++) {
     var visitor = visitors[i];
     if (visitor.state === "waiting" && x > visitor.x - 40 && x < visitor.x + 160 && y > visitor.y - 70 && y < visitor.y + 34) {
