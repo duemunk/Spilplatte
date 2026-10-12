@@ -18,10 +18,15 @@ var PARKED_CAR_COUNT = 200;
 
 var COLORS = ["#d7262e", "#1f6feb", "#f2c200", "#1a1a1a", "#f5f5f5", "#2f9e44", "#f76707", "#ae3ec9"];
 var STYLES = [
-  { key: "sport", name: "Sportsvogn" },
-  { key: "racer", name: "Racerbil" },
-  { key: "jeep", name: "Jeep" }
+  { key: "sport", name: "Sportsvogn", priceInKr: 0, power: 1, speed: 5 },
+  { key: "jeep", name: "Jeep", priceInKr: 60, power: 1.15, speed: 6 },
+  { key: "racer", name: "Racerbil", priceInKr: 150, power: 1.3, speed: 7 },
+  { key: "super", name: "Superbil", priceInKr: 300, power: 1.55, speed: 9 }
 ];
+var PARACHUTE_PRICE_IN_KR = 80;
+var METERS_PER_KR = 10;
+var CHUTE_FALL_SPEED = 120;
+var wallet = { money: 0, owned: ["sport"], parachute: false };
 var PARKED_COLORS = ["#c0c0c8", "#2b4c7e", "#8b1e1e", "#e8e8e8", "#3a3a3a", "#5b7f3a", "#d9c27a"];
 
 var rampHeights = [];
@@ -81,11 +86,13 @@ function setup() {
       style: j % 5 === 2 ? "jeep" : "sedan"
     });
   }
+  wallet = load("wallet", wallet);
   var saved = load("settings", {});
   settings = {};
   Object.keys(DEFAULT_SETTINGS).forEach(function (key) {
     settings[key] = saved[key] === undefined ? DEFAULT_SETTINGS[key] : saved[key];
   });
+  if (wallet.owned.indexOf(settings.style) === -1) wallet.owned.push(settings.style);
   record = load("record", 0);
 }
 
@@ -96,15 +103,45 @@ function startRun() {
   phase = "ramp";
 }
 
+function styleOf(key) {
+  for (var i = 0; i < STYLES.length; i++) if (STYLES[i].key === key) return STYLES[i];
+  return STYLES[0];
+}
+
+function drawChute(x, y, angle) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.strokeStyle = "#555";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(-50, -40); ctx.lineTo(-80, -150);
+  ctx.moveTo(50, -40); ctx.lineTo(80, -150);
+  ctx.moveTo(0, -45); ctx.lineTo(0, -160);
+  ctx.stroke();
+  ["#e03131", "#fcc419", "#1c7ed6", "#2f9e44"].forEach(function (color, i) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(0, -150);
+    ctx.arc(0, -150, 100, Math.PI + i * Math.PI / 4, Math.PI + (i + 1) * Math.PI / 4);
+    ctx.closePath();
+    ctx.fill();
+  });
+  ctx.restore();
+}
+
 function finish(goodLanding) {
   var flips = Math.floor(Math.abs(car.spin) / (Math.PI * 2) + 0.15);
   var meters = Math.round((car.x - lip.x) / UNITS_PER_METER);
   if (goodLanding) meters += flips * METERS_PER_FLIP;
   var passed = 0;
   parkedCars.forEach(function (parked) { if (parked.x < car.x) passed++; });
+  var earned = Math.max(1, Math.round(meters / METERS_PER_KR));
+  wallet.money += earned;
+  save("wallet", wallet);
   var isRecord = meters > record;
   if (isRecord) { record = meters; save("record", record); }
-  result = { meters: meters, flips: flips, good: goodLanding, passed: passed, isRecord: isRecord };
+  result = { meters: meters, flips: flips, good: goodLanding, passed: passed, isRecord: isRecord, earned: earned };
   sfx(goodLanding ? "bump" : "tab");
   if (isRecord) setTimeout(function () { sfx("sejr"); }, 400);
   phase = "landed";
@@ -115,7 +152,7 @@ function update(dt) {
   if (phase === "ramp") {
     var angle = rampAngle(car.x);
     car.speed += GRAVITY * Math.sin(angle) * dt;
-    if (buttons.gas) car.speed += GAS_POWER * dt;
+    if (buttons.gas) car.speed += GAS_POWER * styleOf(settings.style).power * dt;
     car.speed *= 1 - 0.05 * dt;
     if (car.speed < 0) car.speed = 0;
     car.x += car.speed * Math.cos(angle) * dt;
@@ -128,9 +165,14 @@ function update(dt) {
     }
   } else if (phase === "air") {
     car.vy += GRAVITY * dt;
+    if (car.chute) {
+      car.vy = Math.min(car.vy, CHUTE_FALL_SPEED);
+      car.vx *= 1 - 0.12 * dt;
+      car.angle += (0 - Math.atan2(Math.sin(car.angle), Math.cos(car.angle))) * Math.min(1, 3 * dt);
+    }
     car.x += car.vx * dt;
     car.y += car.vy * dt;
-    if (buttons.flip) { car.angle -= FLIP_SPEED * dt; car.spin -= FLIP_SPEED * dt; }
+    if (buttons.flip && !car.chute) { car.angle -= FLIP_SPEED * dt; car.spin -= FLIP_SPEED * dt; }
     if (car.y >= GROUND_Y) {
       car.y = GROUND_Y;
       var tilt = Math.atan2(Math.sin(car.angle), Math.cos(car.angle));
@@ -167,6 +209,7 @@ var BODIES = {
   sport: { body: [-62, 0, -60, -16, -40, -20, -18, -36, 14, -36, 38, -22, 64, -16, 66, 0], window: [-14, -32, 12, -32, 30, -21, -32, -21], wheelY: 2, wheel: 12 },
   racer: { body: [-66, 0, -66, -14, -56, -14, -56, -24, -48, -24, -46, -16, -20, -18, -6, -30, 16, -30, 30, -16, 66, -10, 68, 0], window: [-4, -27, 14, -27, 24, -17, -14, -17], wheelY: 2, wheel: 13 },
   jeep: { body: [-58, 0, -58, -30, -40, -32, -36, -52, 26, -52, 30, -32, 58, -30, 60, 0], window: [-30, -48, -4, -48, -4, -33, -32, -33], window2: [2, -48, 22, -48, 25, -33, 2, -33], wheelY: 4, wheel: 15 },
+  super: { body: [-66, 0, -66, -12, -50, -16, -56, -28, -46, -28, -40, -18, -10, -22, 4, -30, 24, -30, 44, -16, 68, -8, 70, 0], window: [6, -27, 22, -27, 36, -17, -4, -19], wheelY: 2, wheel: 13 },
   sedan: { body: [-60, 0, -60, -18, -36, -22, -20, -40, 22, -40, 40, -22, 60, -18, 62, 0], window: [-16, -36, 0, -36, 0, -23, -30, -23], window2: [4, -36, 20, -36, 34, -23, 4, -23], wheelY: 2, wheel: 12 }
 };
 
@@ -296,7 +339,7 @@ function drawWorld() {
     if (left < 80) text("START", 60, rampY(60) - 90, 30, "#fff");
   }
 
-  for (var m = 50; m < 1000; m += 50) {
+  for (var m = 50; m < 3000; m += 50) {
     var markX = lip.x + m * UNITS_PER_METER;
     if (markX > left && markX < right) {
       box(markX - 3, GROUND_Y - 70, 6, 70, "#fff");
@@ -318,6 +361,7 @@ function drawWorld() {
       circle(-74, -16, 10 + car.flame * 10, "#ffe066");
       ctx.restore();
     }
+    if (car.chute) drawChute(car.x, car.y - 20, car.angle);
     drawCar(car.x, car.y, car.angle, settings.style, settings.color, 1.1, settings);
   }
   ctx.restore();
@@ -336,7 +380,8 @@ function drawHud() {
     roundButton(124, 640, 90, "🔥", "Turbo " + car.turbos, car.turbos > 0 ? "#f76707" : "#999", false);
   }
   if (phase === "air") {
-    roundButton(900, 640, 90, "🤸", "Salto", "#1f6feb", buttons.flip);
+    roundButton(900, 640, 90, "🤸", "Salto", car.chute ? "#999" : "#1f6feb", buttons.flip);
+    if (wallet.parachute) roundButton(124, 640, 90, "☂️", car.chute ? "Åben!" : "Faldskærm", car.chute ? "#999" : "#e03131", false);
     var flown = Math.max(0, Math.round((car.x - lip.x) / UNITS_PER_METER));
     box(WIDTH / 2 - 110, 16, 220, 60, "rgba(0,0,0,0.35)");
     text(flown + " m", WIDTH / 2, 46, 36);
@@ -362,7 +407,7 @@ function drawResult() {
   text(result.good ? "Flot landing! 👍" : "Av! Bilen landede skævt 🙃", WIDTH / 2, 330, 28, "#444");
   if (result.flips > 0) text("🤸 " + result.flips + " salto" + (result.flips > 1 ? "er" : "") + (result.good ? " (+" + result.flips * METERS_PER_FLIP + " m)" : ""), WIDTH / 2, 375, 26, "#444");
   text("Du fløj over " + result.passed + " biler 🚗", WIDTH / 2, 420, 26, "#444");
-  text("Rekord: " + record + " m", WIDTH / 2, 462, 22, "#777");
+  text("💰 +" + result.earned + " kr  ·  Rekord: " + record + " m", WIDTH / 2, 462, 24, "#2f9e44");
   bigButton(262, 520, 230, 90, "🔁 Igen", "#2f9e44");
   bigButton(532, 520, 230, 90, "🎨 Garage", "#1f6feb");
 }
@@ -386,6 +431,8 @@ function drawSwatch(x, y, color) {
   fillRainbow(x - 36, y - 36, 72, 72);
   ctx.restore();
 }
+
+function styleX(i) { return 100 + i * 172; }
 
 function drawGarage() {
   clear("#3b3f4a");
@@ -425,10 +472,18 @@ function drawGarage() {
   });
 
   STYLES.forEach(function (style, i) {
-    var x = 192 + i * 220;
-    box(x - 95, 630, 190, 76, style.key === settings.style ? "#ffd34e" : "#555a66");
-    text(style.name, x, 668, 26, style.key === settings.style ? "#222" : "#fff");
+    var x = styleX(i);
+    var owned = wallet.owned.indexOf(style.key) !== -1;
+    var selected = style.key === settings.style;
+    box(x - 82, 622, 164, 92, selected ? "#ffd34e" : owned ? "#555a66" : "#3a3d48");
+    text(style.name, x, 646, 22, selected ? "#222" : "#fff");
+    text("⚡ Fart " + style.speed, x, 674, 17, selected ? "#444" : "#cfd3dc");
+    text(owned ? (selected ? "✔ Valgt" : "Din") : style.priceInKr + " kr", x, 700, 18, selected ? "#222" : owned ? "#9ae6b4" : wallet.money >= style.priceInKr ? "#ffd34e" : "#999");
   });
+  text("💰 " + wallet.money + " kr", WIDTH / 2, 100, 30, "#ffd34e");
+  var chuteColor = wallet.parachute ? "#2f9e44" : wallet.money >= PARACHUTE_PRICE_IN_KR ? "#e03131" : "#555a66";
+  box(WIDTH - 262, 80, 250, 70, chuteColor);
+  text(wallet.parachute ? "☂️ Faldskærm ✔" : "☂️ Faldskærm · " + PARACHUTE_PRICE_IN_KR + " kr", WIDTH - 137, 115, 20);
   bigButton(800, 620, 190, 90, "Kør! 🏁", "#2f9e44");
 }
 
@@ -454,8 +509,26 @@ function onTap(x, y) {
       if (distance(x, y, optionX(i), 555) < 46) { settings[garageTab] = option; sfx("klik"); save("settings", settings); }
     });
     STYLES.forEach(function (style, i) {
-      if (inside(x, y, 192 + i * 220 - 95, 630, 190, 76)) { settings.style = style.key; sfx("klik"); save("settings", settings); }
+      if (!inside(x, y, styleX(i) - 82, 622, 164, 92)) return;
+      if (wallet.owned.indexOf(style.key) === -1) {
+        if (wallet.money < style.priceInKr) { sfx("bump"); return; }
+        wallet.money -= style.priceInKr;
+        wallet.owned.push(style.key);
+        save("wallet", wallet);
+        sfx("sejr");
+      } else {
+        sfx("klik");
+      }
+      settings.style = style.key;
+      save("settings", settings);
     });
+    if (inside(x, y, WIDTH - 262, 80, 250, 70) && !wallet.parachute) {
+      if (wallet.money < PARACHUTE_PRICE_IN_KR) { sfx("bump"); return; }
+      wallet.money -= PARACHUTE_PRICE_IN_KR;
+      wallet.parachute = true;
+      save("wallet", wallet);
+      sfx("sejr");
+    }
     if (inside(x, y, 800, 620, 190, 90)) { sfx("hop"); startRun(); }
     return;
   }
@@ -471,6 +544,7 @@ function onTap(x, y) {
   }
   if (phase === "air") {
     if (distance(x, y, 900, 640) < 100) buttons.flip = true;
+    if (wallet.parachute && !car.chute && distance(x, y, 124, 640) < 100) { car.chute = true; buttons.flip = false; sfx("pop"); }
     return;
   }
   if (phase === "landed" && resultTimer <= 0) {
