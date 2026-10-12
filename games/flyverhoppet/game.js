@@ -26,7 +26,9 @@ var STYLES = [
 var PARACHUTE_PRICE_IN_KR = 80;
 var METERS_PER_KR = 10;
 var CHUTE_FALL_SPEED = 120;
-var wallet = { money: 0, owned: ["sport"], parachute: false };
+var TURBO_PRICE_IN_KR = 40;
+var MAX_EXTRA_TURBOS = 4;
+var wallet = { money: 0, owned: ["sport"], parachute: false, extraTurbos: 0 };
 var PARKED_COLORS = ["#c0c0c8", "#2b4c7e", "#8b1e1e", "#e8e8e8", "#3a3a3a", "#5b7f3a", "#d9c27a"];
 
 var rampHeights = [];
@@ -41,9 +43,10 @@ var GARAGE_TABS = [
   { key: "color", name: "🚗 Bil" },
   { key: "badge", name: "🔣 Mærke" },
   { key: "badgeColor", name: "🎨 Mærkefarve" },
-  { key: "wheelColor", name: "⚙️ Hjul" }
+  { key: "wheelColor", name: "⚙️ Hjul" },
+  { key: "chuteColor", name: "☂️ Skærm" }
 ];
-var DEFAULT_SETTINGS = { color: COLORS[0], style: "sport", badge: "A", badgeColor: COLORS[0], wheelColor: "#c0c0c8" };
+var DEFAULT_SETTINGS = { color: COLORS[0], style: "sport", badge: "A", badgeColor: COLORS[0], wheelColor: "#c0c0c8", chuteColor: "rainbow" };
 var settings = DEFAULT_SETTINGS;
 var garageTab = "color";
 var record = 0;
@@ -87,6 +90,7 @@ function setup() {
     });
   }
   wallet = load("wallet", wallet);
+  wallet.extraTurbos = wallet.extraTurbos || 0;
   var saved = load("settings", {});
   settings = {};
   Object.keys(DEFAULT_SETTINGS).forEach(function (key) {
@@ -97,7 +101,7 @@ function setup() {
 }
 
 function startRun() {
-  car = { x: 40, y: rampY(40), speed: 0, vx: 0, vy: 0, angle: rampAngle(40), spin: 0, turbos: TURBOS_PER_RUN, flame: 0 };
+  car = { x: 40, y: rampY(40), speed: 0, vx: 0, vy: 0, angle: rampAngle(40), spin: 0, turbos: TURBOS_PER_RUN + wallet.extraTurbos, flame: 0 };
   buttons.gas = false;
   buttons.flip = false;
   phase = "ramp";
@@ -108,10 +112,11 @@ function styleOf(key) {
   return STYLES[0];
 }
 
-function drawChute(x, y, angle) {
+function drawChute(x, y, angle, color, scale) {
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(angle);
+  if (scale) ctx.scale(scale, scale);
   ctx.strokeStyle = "#555";
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -119,11 +124,12 @@ function drawChute(x, y, angle) {
   ctx.moveTo(50, -40); ctx.lineTo(80, -150);
   ctx.moveTo(0, -45); ctx.lineTo(0, -160);
   ctx.stroke();
-  ["#e03131", "#fcc419", "#1c7ed6", "#2f9e44"].forEach(function (color, i) {
-    ctx.fillStyle = color;
+  var segments = color === RAINBOW ? RAINBOW_STRIPES : [color, "#ffffff", color, "#ffffff", color, "#ffffff"];
+  segments.forEach(function (segment, i) {
+    ctx.fillStyle = segment;
     ctx.beginPath();
     ctx.moveTo(0, -150);
-    ctx.arc(0, -150, 100, Math.PI + i * Math.PI / 4, Math.PI + (i + 1) * Math.PI / 4);
+    ctx.arc(0, -150, 100, Math.PI + i * Math.PI / segments.length, Math.PI + (i + 1) * Math.PI / segments.length);
     ctx.closePath();
     ctx.fill();
   });
@@ -361,7 +367,7 @@ function drawWorld() {
       circle(-74, -16, 10 + car.flame * 10, "#ffe066");
       ctx.restore();
     }
-    if (car.chute) drawChute(car.x, car.y - 20, car.angle);
+    if (car.chute) drawChute(car.x, car.y - 20, car.angle, settings.chuteColor);
     drawCar(car.x, car.y, car.angle, settings.style, settings.color, 1.1, settings);
   }
   ctx.restore();
@@ -439,13 +445,14 @@ function drawGarage() {
   box(0, 410, WIDTH, 358, "#2a2d35");
   text("🎨 Garage", WIDTH / 2, 50, 44);
   text("🏆 Rekord: " + record + " m", WIDTH - 130, 50, 22);
+  if (garageTab === "chuteColor") drawChute(WIDTH / 2, 380, 0, settings.chuteColor, 1.25);
   drawCar(WIDTH / 2, 370, 0, settings.style, settings.color, 2.6, settings);
 
   GARAGE_TABS.forEach(function (tab, i) {
-    var x = 112 + i * 205;
+    var x = 52 + i * 186;
     var active = tab.key === garageTab;
-    box(x, 425, 195, 64, active ? "#ffd34e" : "#555a66");
-    text(tab.name, x + 97, 457, 22, active ? "#222" : "#fff");
+    box(x, 425, 176, 64, active ? "#ffd34e" : "#555a66");
+    text(tab.name, x + 88, 457, 20, active ? "#222" : "#fff");
   });
 
   garageOptions().forEach(function (option, i) {
@@ -480,10 +487,15 @@ function drawGarage() {
     text("⚡ Fart " + style.speed, x, 674, 17, selected ? "#444" : "#cfd3dc");
     text(owned ? (selected ? "✔ Valgt" : "Din") : style.priceInKr + " kr", x, 700, 18, selected ? "#222" : owned ? "#9ae6b4" : wallet.money >= style.priceInKr ? "#ffd34e" : "#999");
   });
-  text("💰 " + wallet.money + " kr", WIDTH / 2, 100, 30, "#ffd34e");
+  text("💰 " + wallet.money + " kr", WIDTH - 137, 88, 28, "#ffd34e");
   var chuteColor = wallet.parachute ? "#2f9e44" : wallet.money >= PARACHUTE_PRICE_IN_KR ? "#e03131" : "#555a66";
-  box(WIDTH - 262, 80, 250, 70, chuteColor);
-  text(wallet.parachute ? "☂️ Faldskærm ✔" : "☂️ Faldskærm · " + PARACHUTE_PRICE_IN_KR + " kr", WIDTH - 137, 115, 20);
+  box(WIDTH - 262, 116, 250, 66, chuteColor);
+  text(wallet.parachute ? "☂️ Faldskærm ✔" : "☂️ Faldskærm · " + PARACHUTE_PRICE_IN_KR + " kr", WIDTH - 137, 149, 20);
+  var maxed = wallet.extraTurbos >= MAX_EXTRA_TURBOS;
+  var turboColor = maxed ? "#2f9e44" : wallet.money >= TURBO_PRICE_IN_KR ? "#f76707" : "#555a66";
+  box(WIDTH - 262, 194, 250, 66, turboColor);
+  text(maxed ? "🔥 Turbo x" + (TURBOS_PER_RUN + wallet.extraTurbos) + " ✔" : "🔥 +1 turbo · " + TURBO_PRICE_IN_KR + " kr", WIDTH - 137, 218, 20);
+  text("Du har " + (TURBOS_PER_RUN + wallet.extraTurbos) + " pr. tur", WIDTH - 137, 244, 16, "#fff");
   bigButton(800, 620, 190, 90, "Kør! 🏁", "#2f9e44");
 }
 
@@ -503,7 +515,7 @@ function inside(x, y, left, top, width, height) {
 function onTap(x, y) {
   if (phase === "garage") {
     GARAGE_TABS.forEach(function (tab, i) {
-      if (inside(x, y, 112 + i * 205, 425, 195, 64)) { garageTab = tab.key; sfx("klik"); }
+      if (inside(x, y, 52 + i * 186, 425, 176, 64)) { garageTab = tab.key; sfx("klik"); }
     });
     garageOptions().forEach(function (option, i) {
       if (distance(x, y, optionX(i), 555) < 46) { settings[garageTab] = option; sfx("klik"); save("settings", settings); }
@@ -522,7 +534,14 @@ function onTap(x, y) {
       settings.style = style.key;
       save("settings", settings);
     });
-    if (inside(x, y, WIDTH - 262, 80, 250, 70) && !wallet.parachute) {
+    if (inside(x, y, WIDTH - 262, 194, 250, 66) && wallet.extraTurbos < MAX_EXTRA_TURBOS) {
+      if (wallet.money < TURBO_PRICE_IN_KR) { sfx("bump"); return; }
+      wallet.money -= TURBO_PRICE_IN_KR;
+      wallet.extraTurbos++;
+      save("wallet", wallet);
+      sfx("eksplosion");
+    }
+    if (inside(x, y, WIDTH - 262, 116, 250, 66) && !wallet.parachute) {
       if (wallet.money < PARACHUTE_PRICE_IN_KR) { sfx("bump"); return; }
       wallet.money -= PARACHUTE_PRICE_IN_KR;
       wallet.parachute = true;
