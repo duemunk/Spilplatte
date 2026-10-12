@@ -46,18 +46,33 @@ var FURNITURE = {
   badekar: { emoji: "🛁", name: "Badekar", priceInKr: 20, words: "Plask plask! 💦", sound: "boing" },
   kokken: { emoji: "🍳", name: "Køkken", priceInKr: 25, words: "", sound: "hop" },
   service: { emoji: "🍽️", name: "Service", priceInKr: 5, words: "Gafler og knive 🍴", sound: "klik" },
+  bamse: { emoji: "🧸", name: "Bamse", priceInKr: 8, words: "Kram! 🧸💕", sound: "pop" },
+  klaver: { emoji: "🎹", name: "Klaver", priceInKr: 30, words: "Ding dong ding 🎶", sound: "sejr" },
+  bruser: { emoji: "🚿", name: "Bruser", priceInKr: 15, words: "Splash! 💦", sound: "boing" },
+  lampe: { emoji: "💡", name: "Lampe", priceInKr: 8, words: "Nu er der lys 💡", sound: "klik" },
+  boger: { emoji: "📚", name: "Bøger", priceInKr: 10, words: "Jeg læser en god bog 📖", sound: "klik" },
+  spil: { emoji: "🎮", name: "Spillekonsol", priceInKr: 25, words: "Jeg vandt! 🎮🏆", sound: "laser" },
+  ur: { emoji: "🕰️", name: "Ur", priceInKr: 10, words: "Tik tak ⏰", sound: "klik" },
+  kaktus: { emoji: "🌵", name: "Kaktus", priceInKr: 5, words: "Av, den stikker! 🌵", sound: "bump" },
+  billede: { emoji: "🖼️", name: "Billede", priceInKr: 12, words: "Sikke et flot billede 🖼️", sound: "klik" },
   blomst: { emoji: "🌻", name: "Blomst", priceInKr: 5, words: "Den dufter godt 🌸", sound: "klik" }
 };
-var FURNITURE_ORDER = ["seng", "sofa", "fjernsyn", "toilet", "badekar", "kokken", "service", "blomst"];
+var FURNITURE_ORDER = ["seng", "sofa", "fjernsyn", "toilet", "badekar", "bruser", "kokken", "service", "blomst", "bamse", "klaver", "lampe", "boger", "spil", "ur", "kaktus", "billede"];
 var PETS = {
   hund: { emoji: "🐶", name: "Hund", priceInKr: 30, words: "Vov vov! 🐾" },
   kat: { emoji: "🐱", name: "Kat", priceInKr: 30, words: "Miav! 💕" },
   kanin: { emoji: "🐰", name: "Kanin", priceInKr: 25, words: "Hop hop! 🥕" },
   hamster: { emoji: "🐹", name: "Hamster", priceInKr: 20, words: "Pip pip! 🌰" },
   hest: { emoji: "🐴", name: "Hest", priceInKr: 60, words: "Vrinsk! 🐎" },
-  fisk: { emoji: "🐠", name: "Fisk", priceInKr: 15, words: "Blub blub 💧" }
+  fisk: { emoji: "🐠", name: "Fisk", priceInKr: 15, words: "Blub blub 💧" },
+  papegoje: { emoji: "🦜", name: "Papegøje", priceInKr: 35, words: "Hej hej! Rap rap! 🦜" },
+  enhjorning: { emoji: "🦄", name: "Enhjørning", priceInKr: 80, words: "Magi! ✨🌈" },
+  gris: { emoji: "🐷", name: "Gris", priceInKr: 25, words: "Øf øf! 🐷" },
+  skildpadde: { emoji: "🐢", name: "Skildpadde", priceInKr: 20, words: "Lang… som… om… 🐢" },
+  pindsvin: { emoji: "🦔", name: "Pindsvin", priceInKr: 20, words: "Snøft snøft 🦔" },
+  hone: { emoji: "🐔", name: "Høne", priceInKr: 15, words: "Gok gok! 🥚" }
 };
-var PET_ORDER = ["hund", "kat", "kanin", "hamster", "hest", "fisk"];
+var PET_ORDER = ["hund", "kat", "kanin", "hamster", "hest", "fisk", "papegoje", "enhjorning", "gris", "skildpadde", "pindsvin", "hone"];
 var PET_FOOD = { emoji: "🦴", name: "Dyremad x5", priceInKr: 10, portions: 5 };
 var HUNGRY_AT = 70;
 var HUNGER_PER_SECOND = 100 / 180;
@@ -250,7 +265,7 @@ function allPets() {
   return pets;
 }
 
-var PET_MEALS = { hund: "et kødben 🍖", kat: "en fisk 🐟", kanin: "en gulerod 🥕", hamster: "en nød 🌰", hest: "et æble 🍎", fisk: "fiskefoder 🐠" };
+var PET_MEALS = { hund: "et kødben 🍖", kat: "en fisk 🐟", kanin: "en gulerod 🥕", hamster: "en nød 🌰", hest: "et æble 🍎", fisk: "fiskefoder 🐠", papegoje: "nogle frø 🌻", enhjorning: "regnbuekage 🌈🍰", gris: "en æblekerne 🍏", skildpadde: "salat 🥬", pindsvin: "en orm 🐛", hone: "majs 🌽" };
 
 function feed(pets) {
   var hungry = pets.filter(function (pet) { return pet.hunger >= HUNGRY_AT; });
@@ -459,19 +474,28 @@ function drawCustomer(shop) {
   emoji(shop.customer.item.emoji, x, y - 66, 26);
 }
 
+function compactMenu() { return menu && menu.kind !== "sell" && menuChoices().length > 8; }
+function choiceHalf() { return compactMenu() ? 52 : 75; }
+
 function drawChoice(x, y, symbol, name, priceInKr, color) {
   var canAfford = money >= priceInKr;
-  box(x - 75, y - 75, 150, 150, canAfford ? color : "#cccccc");
-  emoji(symbol, x, y - 22, 60);
-  text(name, x, y + 30, 22, canAfford ? "#fff" : "#888");
-  text(priceInKr + " kr", x, y + 58, 20, canAfford ? "#fff" : "#888");
+  var half = choiceHalf();
+  var small = half < 75;
+  box(x - half, y - half, half * 2, half * 2, canAfford ? color : "#cccccc");
+  emoji(symbol, x, y - (small ? 18 : 22), small ? 44 : 60);
+  text(name, x, y + (small ? 18 : 30), small ? 15 : 22, canAfford ? "#fff" : "#888");
+  text(priceInKr + " kr", x, y + (small ? 38 : 58), small ? 14 : 20, canAfford ? "#fff" : "#888");
 }
 
 function choiceX(i) {
-  var perRow = Math.min(4, menu && menu.kind !== "sell" ? menuChoices().length : 4);
-  return WIDTH / 2 + ((i % 4) - (perRow - 1) / 2) * 173;
+  var perRow = compactMenu() ? 6 : Math.min(4, menu && menu.kind !== "sell" ? menuChoices().length : 4);
+  var spacing = compactMenu() ? 112 : 173;
+  return WIDTH / 2 + ((i % perRow) - (perRow - 1) / 2) * spacing;
 }
-function choiceY(i) { return 340 + Math.floor(i / 4) * 170; }
+function choiceY(i) {
+  if (compactMenu()) return 316 + Math.floor(i / 6) * 112;
+  return 340 + Math.floor(i / 4) * 170;
+}
 
 function menuChoices() {
   if (menu.kind === "build") return BUILD_ORDER.map(function (key) { return key === "hus" ? HOUSE : SHOP_TYPES[key]; });
@@ -632,7 +656,7 @@ function tapMenu(x, y) {
   if (menu.kind !== "sell") {
     var picked = -1;
     menuChoices().forEach(function (choice, i) {
-      if (Math.abs(x - choiceX(i)) < 75 && Math.abs(y - choiceY(i)) < 75) picked = i;
+      if (Math.abs(x - choiceX(i)) < choiceHalf() && Math.abs(y - choiceY(i)) < choiceHalf()) picked = i;
     });
     if (picked === -1) return;
     var choice = menuChoices()[picked];

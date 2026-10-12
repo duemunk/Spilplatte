@@ -55,9 +55,37 @@ var FURNITURE = {
   badekar: { emoji: "🛁", name: "Badekar", priceInKr: 20, words: "Plask plask! 💦", sound: "boing" },
   kokken: { emoji: "🍳", name: "Køkken", priceInKr: 25, words: "", sound: "hop" },
   service: { emoji: "🍽️", name: "Service", priceInKr: 5, words: "Gafler og knive 🍴", sound: "klik" },
+  bamse: { emoji: "🧸", name: "Bamse", priceInKr: 8, words: "Kram! 🧸💕", sound: "pop" },
+  klaver: { emoji: "🎹", name: "Klaver", priceInKr: 30, words: "Ding dong ding 🎶", sound: "sejr" },
+  bruser: { emoji: "🚿", name: "Bruser", priceInKr: 15, words: "Splash! 💦", sound: "boing" },
+  lampe: { emoji: "💡", name: "Lampe", priceInKr: 8, words: "Nu er der lys 💡", sound: "klik" },
+  boger: { emoji: "📚", name: "Bøger", priceInKr: 10, words: "Jeg læser en god bog 📖", sound: "klik" },
+  spil: { emoji: "🎮", name: "Spillekonsol", priceInKr: 25, words: "Jeg vandt! 🎮🏆", sound: "laser" },
+  ur: { emoji: "🕰️", name: "Ur", priceInKr: 10, words: "Tik tak ⏰", sound: "klik" },
+  kaktus: { emoji: "🌵", name: "Kaktus", priceInKr: 5, words: "Av, den stikker! 🌵", sound: "bump" },
+  billede: { emoji: "🖼️", name: "Billede", priceInKr: 12, words: "Sikke et flot billede 🖼️", sound: "klik" },
   blomst: { emoji: "🌺", name: "Blomst", priceInKr: 5, words: "Den dufter godt 🌸", sound: "klik" }
 };
-var FURNITURE_ORDER = ["seng", "sofa", "fjernsyn", "toilet", "badekar", "kokken", "service", "blomst"];
+var FURNITURE_ORDER = ["seng", "sofa", "fjernsyn", "toilet", "badekar", "bruser", "kokken", "service", "blomst", "bamse", "klaver", "lampe", "boger", "spil", "ur", "kaktus", "billede"];
+var PETS = {
+  hund: { emoji: "🐶", name: "Hund", priceInKr: 30, words: "Vov vov! 🐾" },
+  kat: { emoji: "🐱", name: "Kat", priceInKr: 30, words: "Miav! 💕" },
+  kanin: { emoji: "🐰", name: "Kanin", priceInKr: 25, words: "Hop hop! 🥕" },
+  hamster: { emoji: "🐹", name: "Hamster", priceInKr: 20, words: "Pip pip! 🌰" },
+  hest: { emoji: "🐴", name: "Hest", priceInKr: 60, words: "Vrinsk! 🐎" },
+  fisk: { emoji: "🐠", name: "Fisk", priceInKr: 15, words: "Blub blub 💧" },
+  papegoje: { emoji: "🦜", name: "Papegøje", priceInKr: 35, words: "Hej hej! Rap rap! 🦜" },
+  enhjorning: { emoji: "🦄", name: "Enhjørning", priceInKr: 80, words: "Magi! ✨🌈" },
+  gris: { emoji: "🐷", name: "Gris", priceInKr: 25, words: "Øf øf! 🐷" },
+  skildpadde: { emoji: "🐢", name: "Skildpadde", priceInKr: 20, words: "Lang… som… om… 🐢" },
+  pindsvin: { emoji: "🦔", name: "Pindsvin", priceInKr: 20, words: "Snøft snøft 🦔" },
+  hone: { emoji: "🐔", name: "Høne", priceInKr: 15, words: "Gok gok! 🥚" }
+};
+var PET_ORDER = ["hund", "kat", "kanin", "hamster", "hest", "fisk", "papegoje", "enhjorning", "gris", "skildpadde", "pindsvin", "hone"];
+var PET_FOOD = { emoji: "🦴", name: "Dyremad x5", priceInKr: 10, portions: 5 };
+var HUNGRY_AT = 70;
+var HUNGER_PER_SECOND = 100 / 180;
+var PET_MEALS = { hund: "et kødben 🍖", kat: "en fisk 🐟", kanin: "en gulerod 🥕", hamster: "en nød 🌰", hest: "et æble 🍎", fisk: "fiskefoder 🐠", papegoje: "nogle frø 🌻", enhjorning: "regnbuekage 🌈🍰", gris: "en æblekerne 🍏", skildpadde: "salat 🥬", pindsvin: "en orm 🐛", hone: "majs 🌽" };
 var DISHES = ["🍝", "🍕", "🥞", "🍲", "🌮", "🥗", "🍍"];
 var FLOOR_TOP = 290;
 var FLOOR_BOTTOM = 640;
@@ -90,6 +118,8 @@ var islandSpot = null;
 var dragging = null;
 var pendingAction = null;
 var cooking = 0;
+var food = 0;
+var petFollowers = [];
 
 var palms = BASE_PALMS;
 
@@ -151,23 +181,29 @@ function setup() {
     money = saved.money;
     buildings = saved.buildings;
     islandLevel = saved.islandLevel || 0;
+    food = saved.food || 0;
     plots = saved.plots || BASE_PLOTS;
   }
   setIslandSize();
   buildings.forEach(function (building) {
     building.wait = random(3, 7);
-    if (building.type === "hus") building.furniture = building.furniture || [];
+    if (building.type === "hus") {
+      building.furniture = building.furniture || [];
+      building.pets = building.pets || [];
+    }
   });
+  rebuildFollowers();
   for (var i = 0; i < 4; i++) addCoin();
 }
 
 function remember() {
   save("state", {
     money: money,
+    food: food,
     islandLevel: islandLevel,
     plots: plots,
     buildings: buildings.map(function (b) {
-      return b.type === "hus" ? { plot: b.plot, type: b.type, furniture: b.furniture } : { plot: b.plot, type: b.type };
+      return b.type === "hus" ? { plot: b.plot, type: b.type, furniture: b.furniture, pets: b.pets } : { plot: b.plot, type: b.type };
     })
   });
 }
@@ -208,6 +244,119 @@ function float(words, x, y, color) {
   floaters.push({ words: words, x: x, y: y, color: color, life: 1.4 });
 }
 
+function allPets() {
+  var pets = [];
+  buildings.forEach(function (b) { if (b.type === "hus") pets = pets.concat(b.pets); });
+  return pets;
+}
+
+function rebuildFollowers() {
+  var old = petFollowers;
+  petFollowers = [];
+  allPets().forEach(function (pet) {
+    if (pet.kind === "fisk") return;
+    var previous = old[petFollowers.length];
+    petFollowers.push({ pet: pet, kind: pet.kind, x: previous ? previous.x : player.x - 50, y: previous ? previous.y : player.y + 20 });
+  });
+}
+
+function followPets(dt) {
+  var leaderX = player.x;
+  var leaderY = player.y;
+  petFollowers.forEach(function (pet) {
+    var dx = leaderX - pet.x;
+    var dy = leaderY - pet.y;
+    var length = Math.sqrt(dx * dx + dy * dy);
+    if (length > 60) {
+      var step = Math.min(length - 60, PLAYER_SPEED * 0.9 * dt);
+      pet.x += dx / length * step;
+      pet.y += dy / length * step;
+    }
+    leaderX = pet.x;
+    leaderY = pet.y;
+  });
+}
+
+function petAt(x, y) {
+  for (var i = 0; i < petFollowers.length; i++) {
+    if (distance(x, y, petFollowers[i].x, petFollowers[i].y) < 45) return petFollowers[i];
+  }
+  return null;
+}
+
+function feed(pets) {
+  var hungry = pets.filter(function (pet) { return pet.hunger >= HUNGRY_AT; });
+  var name = PETS[pets[0].kind].name.toLowerCase();
+  if (hungry.length === 0) { say(PETS[pets[0].kind].words + " Jeg er mæt ❤️"); sfx("pop"); return; }
+  if (food === 0) { say("Køb dyremad under 🐾 Dyr i dit hus"); sfx("bump"); return; }
+  food--;
+  hungry.forEach(function (pet) { pet.hunger = 0; });
+  say("Nam nam! Din " + name + " fik " + PET_MEALS[pets[0].kind] + " ❤️");
+  sfx("sejr");
+  remember();
+}
+
+function drawHungry(x, y) {
+  box(x - 44, y - 30, 88, 30, "#fff");
+  text("Sulten 🍖", x, y - 15, 16, "#c53030");
+}
+
+function drawPets() {
+  petFollowers.forEach(function (pet) {
+    var size = pet.kind === "hest" || pet.kind === "enhjorning" ? 80 : 46;
+    emoji(PETS[pet.kind].emoji, pet.x, pet.y, size);
+    if (pet.pet.hunger >= HUNGRY_AT) drawHungry(pet.x, pet.y - size / 2);
+  });
+}
+
+function aquarium() {
+  var fish = home.pets.filter(function (pet) { return pet.kind === "fisk"; });
+  if (fish.length === 0) return null;
+  return { kind: "akvarium", x: 820, y: 210, fish: fish };
+}
+
+function gridSpot(i, count) {
+  var compact = count > 8;
+  var perRow = compact ? 6 : Math.min(4, count);
+  var spacing = compact ? 112 : 173;
+  return {
+    x: WIDTH / 2 + ((i % perRow) - (perRow - 1) / 2) * spacing,
+    y: (compact ? 316 : 345) + Math.floor(i / perRow) * (compact ? 112 : 170),
+    half: compact ? 52 : 75
+  };
+}
+
+function drawGridChoice(spot, symbol, name, priceInKr, color) {
+  var canAfford = money >= priceInKr;
+  var small = spot.half < 75;
+  box(spot.x - spot.half, spot.y - spot.half, spot.half * 2, spot.half * 2, canAfford ? color : "#cccccc");
+  emoji(symbol, spot.x, spot.y - (small ? 18 : 22), small ? 44 : 60);
+  text(name, spot.x, spot.y + (small ? 18 : 30), small ? 15 : 22, canAfford ? "#fff" : "#888");
+  text(priceInKr + " kr", spot.x, spot.y + (small ? 38 : 58), small ? 14 : 20, canAfford ? "#fff" : "#888");
+}
+
+var OWN_CAKES = [
+  { emoji: "🧁", name: "Cupcake", priceInKr: 4 },
+  { emoji: "🍰", name: "Lagkage", priceInKr: 6 },
+  { emoji: "🍩", name: "Donut", priceInKr: 3 },
+  { emoji: "🍪", name: "Småkage", priceInKr: 2 }
+];
+
+function firstHouse() {
+  for (var i = 0; i < buildings.length; i++) if (buildings[i].type === "hus") return buildings[i];
+  return null;
+}
+
+function shopChoices() {
+  if (menu.kind === "cakes") return OWN_CAKES;
+  if (menu.kind === "stable") return [PETS.hest, PETS.enhjorning];
+  return [];
+}
+
+function petChoices() {
+  return PET_ORDER.map(function (key) { return PETS[key]; }).concat([PET_FOOD]);
+}
+
 function say(words) {
   speech = { words: words, life: 2.2, width: 0 };
 }
@@ -236,6 +385,8 @@ function update(dt) {
   }
   if (speech) { speech.life -= dt; if (speech.life <= 0) speech = null; }
   if (menu) return;
+  allPets().forEach(function (pet) { pet.hunger = Math.min(100, pet.hunger + HUNGER_PER_SECOND * dt); });
+  followPets(dt);
   if (scene === "inside") { updateInside(dt); return; }
 
   moveToward(player, player.targetX, player.targetY, PLAYER_SPEED, dt);
@@ -422,6 +573,15 @@ function bigButton(x, y, width, height, label, color) {
 }
 
 function drawFurniture(item) {
+  if (item.kind === "akvarium") {
+    box(item.x - 90, item.y - 60, 180, 120, "#90cdf4");
+    box(item.x - 90, item.y + 50, 180, 12, "#d69e2e");
+    item.fish.forEach(function (pet, i) {
+      emoji("🐠", item.x - 40 + i * 25 + Math.sin(Date.now() / 600 + i) * 25, item.y - 20 + (i % 3) * 25, 40);
+    });
+    if (item.fish.some(function (pet) { return pet.hunger >= HUNGRY_AT; })) drawHungry(item.x, item.y - 60);
+    return;
+  }
   if (item.kind === "kokken") {
     box(item.x - 70, item.y - 55, 140, 110, "#e2e8f0");
     box(item.x - 70, item.y - 55, 140, 16, "#a0aec0");
@@ -446,14 +606,19 @@ function drawInside() {
   box(505, 60, 10, 150, "#fff");
   box(380, 130, 260, 10, "#fff");
   text("🏠 Mit hus", WIDTH / 2, 30, 30, "#5a3825");
-  var everything = home.furniture.slice().sort(function (a, b) { return a.y - b.y; });
+  var everything = home.furniture.slice();
+  var tank = aquarium();
+  if (tank) everything.push(tank);
+  everything.sort(function (a, b) { return a.y - b.y; });
   everything.forEach(drawFurniture);
   if (everything.length === 0) text("Tryk på 🛒 Møbler for at købe møbler", WIDTH / 2, 420, 26, "#fff");
+  drawPets();
   emoji("👧", player.x, player.y, 70);
   drawSpeech(player.x, player.y);
   box(0, 660, WIDTH, 108, "rgba(0,0,0,0.2)");
-  bigButton(240, 672, 240, 84, "🛒 Møbler", "#b7791f");
-  bigButton(544, 672, 240, 84, "🚪 Gå ud", "#2f855a");
+  bigButton(150, 672, 220, 84, "🛒 Møbler", "#b7791f");
+  bigButton(402, 672, 220, 84, "🐾 Dyr", "#d53f8c");
+  bigButton(654, 672, 220, 84, "🚪 Gå ud", "#2f855a");
 }
 
 function choiceX(i, count) { return WIDTH / 2 + (i - (count - 1) / 2) * 173; }
@@ -468,13 +633,25 @@ function drawMenu() {
     text("Du har " + money + " kr", WIDTH / 2, 245, 22, "#555");
     FURNITURE_ORDER.forEach(function (key, i) {
       var item = FURNITURE[key];
-      var x = choiceX(i % 4, 4);
-      var y = 270 + Math.floor(i / 4) * 170;
-      var canAfford = money >= item.priceInKr;
-      box(x - 75, y, 150, 150, canAfford ? "#b7791f" : "#cccccc");
-      emoji(item.emoji, x, y + 52, 56);
-      text(item.name, x, y + 105, 20, canAfford ? "#fff" : "#888");
-      text(item.priceInKr + " kr", x, y + 132, 18, canAfford ? "#fff" : "#888");
+      drawGridChoice(gridSpot(i, FURNITURE_ORDER.length), item.emoji, item.name, item.priceInKr, "#b7791f");
+    });
+    return;
+  }
+  if (menu.kind === "cakes" || menu.kind === "stable") {
+    text(menu.kind === "cakes" ? "🧁 Køb en kage til dig selv" : "🐴 Køb din egen hest", WIDTH / 2, 205, 32, "#222");
+    text("Du har " + money + " kr", WIDTH / 2, 245, 22, "#555");
+    var own = shopChoices();
+    own.forEach(function (choice, i) {
+      drawGridChoice(gridSpot(i, own.length), choice.emoji, choice.name, choice.priceInKr, menu.kind === "cakes" ? "#f783ac" : "#b07d48");
+    });
+    return;
+  }
+  if (menu.kind === "pets") {
+    text("Hvilket dyr vil du have?", WIDTH / 2, 205, 32, "#222");
+    text("Du har " + money + " kr · 🦴 dyremad: " + food, WIDTH / 2, 245, 22, "#555");
+    var choices = petChoices();
+    choices.forEach(function (choice, i) {
+      drawGridChoice(gridSpot(i, choices.length), choice.emoji, choice.name, choice.priceInKr, "#d53f8c");
     });
     return;
   }
@@ -518,6 +695,7 @@ function draw() {
   plots.forEach(drawPlot);
   coins.forEach(function (coin) { circle(coin.x, coin.y, 16, "#c99a06"); circle(coin.x, coin.y, 12, "#ffd34e"); });
   visitors.forEach(drawVisitor);
+  drawPets();
   emoji("👧", player.x, player.y, 60);
   drawSpeech(player.x, player.y);
   floaters.forEach(function (f) { text(f.words, f.x, f.y, 26, f.color); });
@@ -539,11 +717,58 @@ function draw() {
 
 function tapMenu(x, y) {
   if ((x > 770 && x < 870 && y > 136 && y < 236) || x < 162 || x > 862 || y < 150 || y > 620) { menu = null; return; }
+  if (menu.kind === "cakes" || menu.kind === "stable") {
+    var own = shopChoices();
+    var kind = menu.kind;
+    own.forEach(function (choice, i) {
+      var spot = gridSpot(i, own.length);
+      if (Math.abs(x - spot.x) > spot.half || Math.abs(y - spot.y) > spot.half) return;
+      var house = firstHouse();
+      if (kind === "stable" && !house) { sfx("bump"); float("Byg et hus først 🏠", camera.x + WIDTH / 2, camera.y + 600, "#c53030"); return; }
+      if (money < choice.priceInKr) { sfx("bump"); float("Du mangler " + (choice.priceInKr - money) + " kr", camera.x + WIDTH / 2, camera.y + 600, "#c53030"); return; }
+      money -= choice.priceInKr;
+      if (kind === "cakes") {
+        say("Mmm! " + choice.emoji + " 😋");
+        sfx("sejr");
+      } else {
+        var key = choice === PETS.hest ? "hest" : "enhjorning";
+        house.pets.push({ kind: key, hunger: 0 });
+        rebuildFollowers();
+        say(choice.words);
+        sfx("boing");
+      }
+      remember();
+      menu = null;
+    });
+    return;
+  }
+  if (menu.kind === "pets") {
+    var choices = petChoices();
+    choices.forEach(function (choice, i) {
+      var spot = gridSpot(i, choices.length);
+      if (Math.abs(x - spot.x) > spot.half || Math.abs(y - spot.y) > spot.half) return;
+      if (money < choice.priceInKr) { sfx("bump"); float("Du mangler " + (choice.priceInKr - money) + " kr", WIDTH / 2, 630, "#c53030"); return; }
+      money -= choice.priceInKr;
+      if (choice === PET_FOOD) {
+        food += PET_FOOD.portions;
+        say("Nu har du " + food + " portioner dyremad 🦴");
+        sfx("mont");
+      } else {
+        var kind = PET_ORDER[i];
+        home.pets.push({ kind: kind, hunger: 0 });
+        rebuildFollowers();
+        say(kind === "fisk" ? "Fisken bor i akvariet 🐠" : PETS[kind].words);
+        sfx("boing");
+      }
+      remember();
+      menu = null;
+    });
+    return;
+  }
   if (menu.kind === "furniture") {
     FURNITURE_ORDER.forEach(function (key, i) {
-      var cx = choiceX(i % 4, 4);
-      var top = 270 + Math.floor(i / 4) * 170;
-      if (Math.abs(x - cx) > 75 || y < top || y > top + 150) return;
+      var spot = gridSpot(i, FURNITURE_ORDER.length);
+      if (Math.abs(x - spot.x) > spot.half || Math.abs(y - spot.y) > spot.half) return;
       var item = FURNITURE[key];
       if (money < item.priceInKr) { sfx("bump"); float("Du mangler " + (item.priceInKr - money) + " kr", WIDTH / 2, 600, "#c53030"); return; }
       money -= item.priceInKr;
@@ -563,7 +788,7 @@ function tapMenu(x, y) {
       if (money < type.priceInKr) { sfx("bump"); float("Du mangler " + (type.priceInKr - money) + " kr", camera.x + WIDTH / 2, camera.y + 580, "#c53030"); return; }
       money -= type.priceInKr;
       var built = { plot: menu.plot, type: key, wait: random(3, 6) };
-      if (key === "hus") built.furniture = [];
+      if (key === "hus") { built.furniture = []; built.pets = []; }
       buildings.push(built);
       var plot = plots[menu.plot];
       float(key === "hus" ? "Dit eget hus! 🎉" : type.name + "! 🎉", plot.x + PLOT_WIDTH / 2, plot.y, "#fff");
@@ -597,6 +822,7 @@ function goInside(house) {
   islandSpot = { x: player.x, y: player.y };
   player.x = player.targetX = 512;
   player.y = player.targetY = 600;
+  petFollowers.forEach(function (pet, i) { pet.x = 512 - 55 * (i + 1); pet.y = 620; });
   scene = "inside";
   sfx("klik");
 }
@@ -605,6 +831,7 @@ function goOutside() {
   scene = "island";
   player.x = player.targetX = islandSpot.x;
   player.y = player.targetY = islandSpot.y;
+  petFollowers.forEach(function (pet, i) { pet.x = player.x - 55 * (i + 1); pet.y = player.y + 20; });
   home = null;
   pendingAction = null;
   sfx("klik");
@@ -612,10 +839,15 @@ function goOutside() {
 
 function tapInside(x, y) {
   if (y > 660) {
-    if (x > 240 && x < 480) { menu = { kind: "furniture" }; sfx("klik"); }
-    if (x > 544 && x < 784) goOutside();
+    if (x > 150 && x < 370) { menu = { kind: "furniture" }; sfx("klik"); }
+    if (x > 402 && x < 622) { menu = { kind: "pets" }; sfx("klik"); }
+    if (x > 654 && x < 874) goOutside();
     return;
   }
+  var pet = petAt(x, y);
+  if (pet) { feed([pet.pet]); float("❤️", pet.x, pet.y - 40, "#fff"); return; }
+  var tank = aquarium();
+  if (tank && Math.abs(x - tank.x) < 90 && Math.abs(y - tank.y) < 60) { feed(tank.fish); return; }
   var item = furnitureAt(x, y);
   if (item) { dragging = { item: item, startX: x, startY: y, offsetX: item.x - x, offsetY: item.y - y, moved: false }; return; }
   player.targetX = x;
@@ -653,6 +885,8 @@ function onTap(x, y) {
   }
   x += camera.x;
   y += camera.y;
+  var pet = petAt(x, y);
+  if (pet) { feed([pet.pet]); float("❤️", pet.x, pet.y - 40, "#fff"); return; }
   for (var i = 0; i < visitors.length; i++) {
     var visitor = visitors[i];
     if (visitor.state === "waiting" && x > visitor.x - 40 && x < visitor.x + 160 && y > visitor.y - 70 && y < visitor.y + 34) {
@@ -667,6 +901,8 @@ function onTap(x, y) {
     var waiting = visitorAt(building);
     if (waiting && waiting.state === "waiting") { menu = { kind: "help", visitor: waiting }; return; }
     if (building.type === "hus") { goInside(building); return; }
+    if (building.type === "bageri") { menu = { kind: "cakes" }; sfx("klik"); return; }
+    if (building.type === "stald") { menu = { kind: "stable" }; sfx("klik"); return; }
   }
   if (onIsland(x, y, ISLAND.sandX - 20, ISLAND.sandY - 20)) {
     player.targetX = x;
