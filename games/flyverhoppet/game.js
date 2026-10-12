@@ -363,8 +363,9 @@ function drawWorld() {
       ctx.save();
       ctx.translate(car.x, car.y);
       ctx.rotate(car.angle);
-      circle(-80, -16, 18 + car.flame * 20, "#ff9f1c");
-      circle(-74, -16, 10 + car.flame * 10, "#ffe066");
+      RAINBOW_STRIPES.forEach(function (color, i) {
+        circle(-70 - i * 16, -16 + Math.sin(Date.now() / 60 + i) * 4, (16 - i) + car.flame * (22 - i * 2), color);
+      });
       ctx.restore();
     }
     if (car.chute) drawChute(car.x, car.y - 20, car.angle, settings.chuteColor);
@@ -375,7 +376,16 @@ function drawWorld() {
 
 function roundButton(x, y, radius, label, sub, color, pressed) {
   circle(x, y + 6, radius, "rgba(0,0,0,0.3)");
-  circle(x, y + (pressed ? 6 : 0), radius, color);
+  if (color === RAINBOW) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, y + (pressed ? 6 : 0), radius, 0, Math.PI * 2);
+    ctx.clip();
+    fillRainbow(x - radius, y - radius + (pressed ? 6 : 0), radius * 2, radius * 2);
+    ctx.restore();
+  } else {
+    circle(x, y + (pressed ? 6 : 0), radius, color);
+  }
   text(label, x, y - 10 + (pressed ? 6 : 0), 44);
   text(sub, x, y + 34 + (pressed ? 6 : 0), 20);
 }
@@ -383,7 +393,7 @@ function roundButton(x, y, radius, label, sub, color, pressed) {
 function drawHud() {
   if (phase === "ramp") {
     roundButton(900, 640, 90, "⛽️", "Gas", "#2f9e44", buttons.gas);
-    roundButton(124, 640, 90, "🔥", "Turbo " + car.turbos, car.turbos > 0 ? "#f76707" : "#999", false);
+    roundButton(124, 640, 90, "🔥", "Turbo " + car.turbos, car.turbos > 0 ? RAINBOW : "#999", false);
   }
   if (phase === "air") {
     roundButton(900, 640, 90, "🤸", "Salto", car.chute ? "#999" : "#1f6feb", buttons.flip);
