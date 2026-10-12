@@ -36,8 +36,37 @@ var SHOP_TYPES = {
     ]
   }
 };
+SHOP_TYPES.kagebageri = {
+  name: "Kagebageri", sign: "🧁", priceInKr: 30, roof: "#f783ac",
+  items: [
+    { emoji: "🧁", name: "en cupcake", priceInKr: 6 },
+    { emoji: "🍰", name: "et stykke kage", priceInKr: 7 },
+    { emoji: "🍩", name: "en donut", priceInKr: 5 },
+    { emoji: "🍪", name: "en småkage", priceInKr: 5 }
+  ]
+};
+SHOP_TYPES.hospital = {
+  name: "Dyrehospital", sign: "🐾", priceInKr: 40, roof: "#4dabf7",
+  items: [
+    { emoji: "💊", name: "medicin", priceInKr: 8 },
+    { emoji: "🌡️", name: "et termometer", priceInKr: 7 },
+    { emoji: "🥕", name: "noget mad", priceInKr: 6 },
+    { emoji: "❤️", name: "et kram", priceInKr: 5 }
+  ]
+};
+SHOP_TYPES.stald = {
+  name: "Hestestald", sign: "🐴", priceInKr: 50, roof: "#b07d48",
+  items: [
+    { emoji: "🐴", name: "en ridetur", priceInKr: 10 },
+    { emoji: "🥕", name: "en gulerod til hesten", priceInKr: 6 },
+    { emoji: "🍎", name: "et æble til hesten", priceInKr: 6 },
+    { emoji: "💧", name: "vand til hesten", priceInKr: 5 }
+  ]
+};
+var SICK_ANIMALS = ["🐶", "🐱", "🐰", "🐹", "🐦", "🐢"];
+var SICK_CHANCE_PER_SECOND = 1 / 240;
 var HOUSE = { name: "Hus", sign: "🏠", priceInKr: 50, roof: "#c0392b" };
-var BUILD_ORDER = ["bageri", "apotek", "kobmand", "hus"];
+var BUILD_ORDER = ["bageri", "kagebageri", "apotek", "kobmand", "hospital", "stald", "hus"];
 var FURNITURE = {
   seng: { emoji: "🛏️", name: "Seng", priceInKr: 15, words: "Zzz… godnat 😴", sound: "klik" },
   sofa: { emoji: "🛋️", name: "Sofa", priceInKr: 15, words: "Hygge! 😊", sound: "klik" },
@@ -268,6 +297,7 @@ function allPets() {
 var PET_MEALS = { hund: "et kødben 🍖", kat: "en fisk 🐟", kanin: "en gulerod 🥕", hamster: "en nød 🌰", hest: "et æble 🍎", fisk: "fiskefoder 🐠", papegoje: "nogle frø 🌻", enhjorning: "regnbuekage 🌈🍰", gris: "en æblekerne 🍏", skildpadde: "salat 🥬", pindsvin: "en orm 🐛", hone: "majs 🌽" };
 
 function feed(pets) {
+  if (pets.some(function (pet) { return pet.sick; })) { say("Jeg er syg 🤒 Tag mig til dyrehospitalet 🏥"); sfx("tab"); return; }
   var hungry = pets.filter(function (pet) { return pet.hunger >= HUNGRY_AT; });
   var name = PETS[pets[0].kind].name.toLowerCase();
   if (hungry.length === 0) { say(PETS[pets[0].kind].words + " Jeg er mæt ❤️"); sfx("pop"); return; }
@@ -352,7 +382,11 @@ function update(dt) {
   }
   if (speech) { speech.life -= dt; if (speech.life <= 0) speech = null; }
   if (menu) return;
-  allPets().forEach(function (pet) { pet.hunger = Math.min(100, pet.hunger + HUNGER_PER_SECOND * dt); });
+  var canGetSick = hasHospital();
+  allPets().forEach(function (pet) {
+    pet.hunger = Math.min(100, pet.hunger + HUNGER_PER_SECOND * dt);
+    if (canGetSick && !pet.sick && Math.random() < SICK_CHANCE_PER_SECOND * dt) pet.sick = true;
+  });
   if (scene === "inside") { updateInside(dt); return; }
 
   walk(dt);
@@ -385,7 +419,8 @@ function update(dt) {
       var type = SHOP_TYPES[shop.type];
       shop.customer = {
         face: CUSTOMER_FACES[Math.floor(Math.random() * CUSTOMER_FACES.length)],
-        item: type.items[Math.floor(Math.random() * type.items.length)]
+        item: type.items[Math.floor(Math.random() * type.items.length)],
+        animal: SICK_ANIMALS[Math.floor(Math.random() * SICK_ANIMALS.length)]
       };
       sfx("klik");
     }
@@ -469,8 +504,9 @@ function drawCustomer(shop) {
   var x = plot.x + PLOT_WIDTH / 2;
   var y = plot.y + PLOT_HEIGHT + 30;
   emoji(shop.customer.face, x, y, 54);
+  if (shop.type === "hospital") emoji(shop.customer.animal, x - 40, y + 14, 34);
   box(x - 80, y - 110, 160, 60, "#fff");
-  text("Må jeg få", x, y - 92, 18, "#222");
+  text(shop.type === "hospital" ? shop.customer.animal + " 🤒" : "Må jeg få", x, y - 92, 18, "#222");
   emoji(shop.customer.item.emoji, x, y - 66, 26);
 }
 
@@ -484,7 +520,7 @@ function drawChoice(x, y, symbol, name, priceInKr, color) {
   box(x - half, y - half, half * 2, half * 2, canAfford ? color : "#cccccc");
   emoji(symbol, x, y - (small ? 18 : 22), small ? 44 : 60);
   text(name, x, y + (small ? 18 : 30), small ? 15 : 22, canAfford ? "#fff" : "#888");
-  text(priceInKr + " kr", x, y + (small ? 38 : 58), small ? 14 : 20, canAfford ? "#fff" : "#888");
+  text(priceInKr === 0 ? "Gratis" : priceInKr + " kr", x, y + (small ? 38 : 58), small ? 14 : 20, canAfford ? "#fff" : "#888");
 }
 
 function choiceX(i) {
@@ -497,11 +533,34 @@ function choiceY(i) {
   return 340 + Math.floor(i / 4) * 170;
 }
 
+var OWN_CAKES = [
+  { emoji: "🧁", name: "Cupcake", priceInKr: 4 },
+  { emoji: "🍰", name: "Lagkage", priceInKr: 6 },
+  { emoji: "🥐", name: "Croissant", priceInKr: 3 },
+  { emoji: "🍪", name: "Småkage", priceInKr: 2 }
+];
+
+function sickPets() {
+  return allPets().filter(function (pet) { return pet.sick; });
+}
+
+function hasHospital() {
+  return shops.some(function (shop) { return shop.type === "hospital"; });
+}
+
+function firstHouse() {
+  for (var i = 0; i < shops.length; i++) if (shops[i].type === "hus") return shops[i];
+  return null;
+}
+
 function menuChoices() {
   if (menu.kind === "build") return BUILD_ORDER.map(function (key) { return key === "hus" ? HOUSE : SHOP_TYPES[key]; });
   if (menu.kind === "furniture") return FURNITURE_ORDER.map(function (key) { return FURNITURE[key]; });
   if (menu.kind === "pets") return PET_ORDER.map(function (key) { return PETS[key]; }).concat([PET_FOOD]);
   if (menu.kind === "groceries") return [PET_FOOD];
+  if (menu.kind === "stable") return [PETS.hest, PETS.enhjorning];
+  if (menu.kind === "cakes") return OWN_CAKES;
+  if (menu.kind === "vet") return sickPets().map(function (pet) { return { emoji: PETS[pet.kind].emoji, name: PETS[pet.kind].name, priceInKr: 0, pet: pet }; });
   return [];
 }
 
@@ -512,7 +571,7 @@ function drawMenu() {
   text("✖️", 822, 172, 34);
   if (menu.kind === "sell") {
     var customer = menu.shop.customer;
-    text(customer.face + " Må jeg få " + customer.item.name + "?", WIDTH / 2, 200, 34, "#222");
+    text(customer.face + (menu.shop.type === "hospital" ? " Mit dyr er sygt. Hvad skal det have?" : " Må jeg få " + customer.item.name + "?"), WIDTH / 2, 200, menu.shop.type === "hospital" ? 28 : 34, "#222");
     text("Tryk på den rigtige ting", WIDTH / 2, 250, 24, "#555");
     SHOP_TYPES[menu.shop.type].items.forEach(function (item, i) {
       var x = 252 + i * 173;
@@ -522,8 +581,8 @@ function drawMenu() {
     });
     return;
   }
-  var titles = { build: "Hvad vil du bygge?", furniture: "Hvilket møbel vil du købe?", pets: "Hvilket dyr vil du have?", groceries: "🛒 Købmanden" };
-  var colors = { build: null, furniture: "#b7791f", pets: "#d53f8c", groceries: "#3182ce" };
+  var titles = { build: "Hvad vil du bygge?", furniture: "Hvilket møbel vil du købe?", pets: "Hvilket dyr vil du have?", groceries: "🛒 Købmanden", stable: "🐴 Køb din egen hest", cakes: "🧁 Køb en kage til dig selv", vet: "🏥 Hvilket dyr skal gøres rask?" };
+  var colors = { build: null, furniture: "#b7791f", pets: "#d53f8c", groceries: "#3182ce", stable: "#b07d48", cakes: "#f783ac", vet: "#4dabf7" };
   text(titles[menu.kind], WIDTH / 2, 190, 36, "#222");
   text("Du har " + money + " kr", WIDTH / 2, 232, 24, "#555");
   if (menu.kind === "groceries") text("Mad til dine dyr — fodr dem, når de er sultne 🍖", WIDTH / 2, 560, 22, "#555");
@@ -545,11 +604,17 @@ function drawHungry(x, y) {
   text("Sulten 🍖", x, y - 15, 16, "#c53030");
 }
 
+function drawSick(x, y) {
+  box(x - 40, y - 30, 80, 30, "#fff");
+  text("Syg 🤒", x, y - 15, 16, "#c53030");
+}
+
 function drawPets() {
   petFollowers.forEach(function (pet) {
     var size = pet.kind === "hest" ? 80 : 46;
     emoji(PETS[pet.kind].emoji, pet.x, pet.y, size);
-    if (pet.pet.hunger >= HUNGRY_AT) drawHungry(pet.x, pet.y - size / 2);
+    if (pet.pet.sick) drawSick(pet.x, pet.y - size / 2);
+    else if (pet.pet.hunger >= HUNGRY_AT) drawHungry(pet.x, pet.y - size / 2);
   });
 }
 
@@ -660,6 +725,7 @@ function tapMenu(x, y) {
     });
     if (picked === -1) return;
     var choice = menuChoices()[picked];
+    if (menu.kind === "stable" && !firstHouse()) { sfx("bump"); townFloat("Byg et hus først 🏠", WIDTH / 2, 610, "#fff"); return; }
     if (!buy(choice.priceInKr)) return;
     if (menu.kind === "build") {
       var key = BUILD_ORDER[picked];
@@ -673,6 +739,19 @@ function tapMenu(x, y) {
       var spot = freeSpot();
       furnitureHere().push({ kind: FURNITURE_ORDER[picked], x: spot.x, y: spot.y });
       say("Nyt møbel! Træk det hen hvor du vil 👆");
+      sfx("boing");
+    } else if (menu.kind === "vet") {
+      choice.pet.sick = false;
+      choice.pet.hunger = 0;
+      say("Din " + choice.name.toLowerCase() + " er rask igen! ❤️");
+      sfx("sejr");
+    } else if (menu.kind === "cakes") {
+      say("Mmm! " + choice.emoji + " 😋");
+      sfx("sejr");
+    } else if (menu.kind === "stable") {
+      firstHouse().pets.push({ kind: choice === PETS.hest ? "hest" : "enhjorning", hunger: 0 });
+      rebuildFollowers();
+      say(choice.words);
       sfx("boing");
     } else if (menu.kind === "groceries" || picked === PET_ORDER.length) {
       food += PET_FOOD.portions;
@@ -839,6 +918,12 @@ function onTap(x, y) {
     if (!onPlot) { menu = { kind: "build", plot: index }; return; }
     if (onPlot.type === "hus") { goInside(onPlot); return; }
     if (onPlot.type === "kobmand" && !onPlot.customer) { menu = { kind: "groceries" }; sfx("klik"); return; }
+    if (onPlot.type === "stald" && !onPlot.customer) { menu = { kind: "stable" }; sfx("klik"); return; }
+    if ((onPlot.type === "bageri" || onPlot.type === "kagebageri") && !onPlot.customer) { menu = { kind: "cakes" }; sfx("klik"); return; }
+    if (onPlot.type === "hospital" && !onPlot.customer) {
+      if (sickPets().length === 0) { say("Alle dine dyr er raske ❤️"); sfx("pop"); return; }
+      menu = { kind: "vet" }; sfx("klik"); return;
+    }
     if (onPlot.customer) { menu = { kind: "sell", shop: onPlot }; return; }
   }
 
