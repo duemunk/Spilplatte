@@ -1,11 +1,46 @@
 useFont("rund");
+window.USES_PLAYERS = true;
+window.HI_RES = true;
+window.ADAPTIVE = true;
 
 var SIZE = 4;
 var TILE = 124;
 var GAP = 14;
 var BOARD = SIZE * TILE + (SIZE + 1) * GAP;
-var BOARD_X = (WIDTH - BOARD) / 2;
-var BOARD_Y = 160;
+var BOARD_X = 0;
+var BOARD_Y = 0;
+var ui = {};
+
+function onLayout() {
+  var portrait = HEIGHT > WIDTH;
+  BOARD_X = (WIDTH - BOARD) / 2;
+  if (portrait) {
+    var top = Math.max(RESERVED.h + 30, (HEIGHT - BOARD - 420) / 2);
+    ui.title = { x: WIDTH / 2, y: top + 20 };
+    ui.score = { x: BOARD_X, y: top + 60 };
+    ui.best = { x: BOARD_X + BOARD - 240, y: top + 60 };
+    BOARD_Y = top + 140;
+    var below = BOARD_Y + BOARD + 30;
+    ui.newGame = { x: WIDTH / 2 - 200, y: below, w: 190, h: 84 };
+    ui.records = { x: WIDTH / 2 + 10, y: below, w: 190, h: 84 };
+    ui.name = { x: WIDTH / 2, y: below + 130 };
+    ui.hint = { x: WIDTH / 2, y: below + 170, oneLine: true };
+  } else {
+    if (RESERVED.h > 90) BOARD_X = Math.max(BOARD_X, RESERVED.w + 20);
+    ui.title = { x: BOARD_X + BOARD / 2, y: 60 };
+    ui.score = { x: BOARD_X, y: 92 };
+    ui.best = { x: BOARD_X + BOARD - 240, y: 92 };
+    BOARD_Y = 160;
+    var side = BOARD_X + BOARD + (WIDTH - BOARD_X - BOARD) / 2;
+    ui.newGame = { x: side - 95, y: 400, w: 190, h: 84 };
+    ui.records = { x: side - 95, y: 500, w: 190, h: 84 };
+    ui.name = { x: BOARD_X / 2, y: 300 };
+    ui.hint = { x: BOARD_X / 2, y: 420, oneLine: false };
+  }
+}
+onLayout();
+
+function inRect(x, y, r) { return x > r.x && x < r.x + r.w && y > r.y && y < r.y + r.h; }
 var SLIDE_IN_SECONDS = 0.12;
 var SWIPE_MIN = 30;
 var WIN_VALUE = 2048;
@@ -59,13 +94,13 @@ function newGame() {
 
 function remember() {
   var values = grid.map(function (row) { return row.map(function (tile) { return tile ? tile.value : 0; }); });
-  save("board", { values: values, score: score, won: won });
-  save("best", best);
+  playerSave("board", { values: values, score: score, won: won });
+  playerSave("best", best);
 }
 
 function setup() {
-  best = load("best", 0);
-  var saved = load("board", null);
+  best = playerLoad("best", 0);
+  var saved = playerLoad("board", null);
   if (!saved) { newGame(); return; }
   grid = emptyGrid();
   tiles = [];
@@ -178,25 +213,32 @@ function drawTile(tile) {
 
 function draw() {
   clear("#2b1f4a");
-  text("2048", WIDTH / 2, 60, 56, "#ffd43b");
-  box(BOARD_X, 92, 240, 56, "rgba(255,255,255,0.12)");
-  text("Point: " + score, BOARD_X + 120, 120, 26);
-  box(BOARD_X + BOARD - 240, 92, 240, 56, "rgba(255,255,255,0.12)");
-  text("🏆 Rekord: " + best, BOARD_X + BOARD - 120, 120, 24);
+  text("2048", ui.title.x, ui.title.y, 56, "#ffd43b");
+  box(ui.score.x, ui.score.y, 240, 56, "rgba(255,255,255,0.12)");
+  text("Point: " + score, ui.score.x + 120, ui.score.y + 28, 26);
+  box(ui.best.x, ui.best.y, 240, 56, "rgba(255,255,255,0.12)");
+  text("🏆 Rekord: " + best, ui.best.x + 120, ui.best.y + 28, 24);
 
   box(BOARD_X, BOARD_Y, BOARD, BOARD, "#4a3a78");
   for (var r = 0; r < SIZE; r++) for (var c = 0; c < SIZE; c++) box(cellX(c), cellY(r), TILE, TILE, "#5d4b8f");
   tiles.forEach(function (tile) { if (tile.dying) drawTile(tile); });
   tiles.forEach(function (tile) { if (!tile.dying) drawTile(tile); });
 
-  box(818, 400, 190, 84, "#e64980");
-  text("🔁 Nyt spil", 913, 442, 26);
-  text("👆 Swipe", 112, 420, 24, "#cdbfff");
-  text("for at flytte", 112, 452, 20, "#cdbfff");
+  box(ui.newGame.x, ui.newGame.y, ui.newGame.w, ui.newGame.h, "#e64980");
+  text("🔁 Nyt spil", ui.newGame.x + 95, ui.newGame.y + 42, 26);
+  box(ui.records.x, ui.records.y, ui.records.w, ui.records.h, "#5c7cfa");
+  text("🏆 Rekorder", ui.records.x + 95, ui.records.y + 42, 24);
+  text(player().emoji + " " + player().name, ui.name.x, ui.name.y, 24, "#fff");
+  if (ui.hint.oneLine) {
+    text("👆 Swipe for at flytte brikkerne", ui.hint.x, ui.hint.y, 22, "#cdbfff");
+  } else {
+    text("👆 Swipe", ui.hint.x, ui.hint.y, 24, "#cdbfff");
+    text("for at flytte", ui.hint.x, ui.hint.y + 32, 20, "#cdbfff");
+  }
 
   if (floaters.length) {
-    box(WIDTH / 2 - 260, 380, 520, 90, "rgba(0,0,0,0.6)");
-    text(floaters[0].words, WIDTH / 2, 425, 40, "#ffd43b");
+    box(WIDTH / 2 - 260, BOARD_Y + BOARD / 2 - 45, 520, 90, "rgba(0,0,0,0.6)");
+    text(floaters[0].words, WIDTH / 2, BOARD_Y + BOARD / 2, 40, "#ffd43b");
   }
   if (over) {
     box(BOARD_X, BOARD_Y, BOARD, BOARD, "rgba(0,0,0,0.6)");
@@ -206,7 +248,8 @@ function draw() {
 }
 
 function onTap(x, y) {
-  if (x > 818 && x < 1008 && y > 400 && y < 484) { newGame(); sfx("hop"); return; }
+  if (inRect(x, y, ui.newGame)) { newGame(); sfx("hop"); return; }
+  if (inRect(x, y, ui.records)) { showRecords("best", " point"); sfx("klik"); return; }
   swipe = { x: x, y: y, done: false };
 }
 

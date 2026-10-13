@@ -34,16 +34,61 @@
     setTimeout(resize, 1000);
   }
 
+  // A game can opt in to two extras by setting these at the top of game.js:
+  // - window.HI_RES = true: render at the screen's real pixel density (sharp on phones and
+  //   Retina iPads). Only for light games; it costs the old iPad Air up to 4x the pixels.
+  // - window.ADAPTIVE = true: the world keeps a short side of 768 and stretches its long side
+  //   to the screen, in portrait or landscape. WIDTH/HEIGHT change on rotation, and the
+  //   game's onLayout() is called so it can place things again.
+  var glyphScale = 1;
+
+  // The canvas stays inside the safe area (notch, home indicator, rounded corners).
+  var safeProbe = null;
+
+  function safeInsets() {
+    if (!safeProbe) {
+      safeProbe = document.createElement("div");
+      safeProbe.style.cssText = "position:fixed;top:0;left:0;width:0;height:0;visibility:hidden;" +
+        "padding-top:env(safe-area-inset-top);padding-right:env(safe-area-inset-right);" +
+        "padding-bottom:env(safe-area-inset-bottom);padding-left:env(safe-area-inset-left);";
+      document.body.appendChild(safeProbe);
+    }
+    var style = getComputedStyle(safeProbe);
+    return {
+      top: parseFloat(style.paddingTop) || 0, right: parseFloat(style.paddingRight) || 0,
+      bottom: parseFloat(style.paddingBottom) || 0, left: parseFloat(style.paddingLeft) || 0
+    };
+  }
+
+  window.RESERVED = { w: 0, h: 0 };
+
   function resize() {
-    var ratio = PIXEL_RATIO;
-    var width = viewportWidth();
-    var height = viewportHeight();
+    var insets = safeInsets();
+    var width = viewportWidth() - insets.left - insets.right;
+    var height = viewportHeight() - insets.top - insets.bottom;
     window.scrollTo(0, 0);
+    if (window.ADAPTIVE) {
+      if (height > width) { WIDTH = 768; HEIGHT = Math.max(1024, Math.round(768 * height / width)); }
+      else { HEIGHT = 768; WIDTH = Math.max(1024, Math.round(768 * width / height)); }
+      window.WIDTH = WIDTH;
+      window.HEIGHT = HEIGHT;
+    }
+    var ratio = window.HI_RES ? Math.min(window.devicePixelRatio || 1, 3) : PIXEL_RATIO;
     scale = Math.min(width / WIDTH, height / HEIGHT);
+    var canvasLeft = insets.left + (width - WIDTH * scale) / 2;
+    var canvasTop = insets.top + (height - HEIGHT * scale) / 2;
+    // The 🏠 ↺ 👤 buttons cover this much of the world's top-left corner.
+    window.RESERVED = {
+      w: Math.max(0, (insets.left + 236 - canvasLeft) / scale),
+      h: Math.max(0, (insets.top + 84 - canvasTop) / scale)
+    };
+    if (window.ADAPTIVE) call("onLayout");
+    var newGlyphScale = window.HI_RES ? scale * ratio : 1;
+    if (newGlyphScale !== glyphScale) { glyphScale = newGlyphScale; glyphs = {}; glyphCount = 0; }
     canvas.style.width = WIDTH * scale + "px";
     canvas.style.height = HEIGHT * scale + "px";
-    canvas.style.left = (width - WIDTH * scale) / 2 + "px";
-    canvas.style.top = (height - HEIGHT * scale) / 2 + "px";
+    canvas.style.left = canvasLeft + "px";
+    canvas.style.top = canvasTop + "px";
     canvas.width = WIDTH * scale * ratio;
     canvas.height = HEIGHT * scale * ratio;
     ctx.setTransform(scale * ratio, 0, 0, scale * ratio, 0, 0);
@@ -132,12 +177,13 @@
     var cached = glyphs[key];
     if (cached) return cached;
     if (glyphCount >= MAX_CACHED_GLYPHS) { glyphs = {}; glyphCount = 0; }
-    var font = window.fontFor(size);
+    var pixels = Math.round(size * glyphScale);
+    var font = window.fontFor(pixels);
     var c = document.createElement("canvas");
     var g = c.getContext("2d");
     g.font = font;
-    c.width = Math.ceil(g.measureText(words).width + size * 0.4);
-    c.height = Math.ceil(size * 1.4);
+    c.width = Math.ceil(g.measureText(words).width + pixels * 0.4);
+    c.height = Math.ceil(pixels * 1.4);
     g.font = font;
     g.fillStyle = color;
     g.textAlign = "center";
@@ -150,7 +196,10 @@
 
   window.text = function (words, x, y, size, color) {
     var c = glyph(String(words), Math.round(size || 40), color || "#fff");
-    ctx.drawImage(c, Math.round(x - c.width / 2), Math.round(y - c.height / 2));
+    if (glyphScale === 1) { ctx.drawImage(c, Math.round(x - c.width / 2), Math.round(y - c.height / 2)); return; }
+    var w = c.width / glyphScale;
+    var h = c.height / glyphScale;
+    ctx.drawImage(c, x - w / 2, y - h / 2, w, h);
   };
 
   window.emoji = function (symbol, x, y, size) {
@@ -276,11 +325,11 @@
     button.className = "home restart";
     button.href = "#";
     button.textContent = "↺";
-    button.style.left = "88px";
+    button.style.left = "calc(88px + env(safe-area-inset-left))";
     var dialog = document.createElement("div");
     dialog.className = "confirm";
     dialog.innerHTML = '<div class="confirm-box"><p class="confirm-title">Vil du starte forfra?</p>' +
-      '<p class="confirm-text">Alt i spillet bliver slettet: point, rekorder og det du har bygget.</p>' +
+      '<p class="confirm-text">' + (window.USES_PLAYERS ? "Dine point og din rekord i dette spil bliver slettet." : "Alt i spillet bliver slettet: point, rekorder og det du har bygget.") + '</p>' +
       '<button class="confirm-yes">🗑️ Ja, start forfra</button>' +
       '<button class="confirm-no">Nej, spil videre</button></div>';
     function press(element, action) {
@@ -293,13 +342,167 @@
       try {
         for (var i = localStorage.length - 1; i >= 0; i--) {
           var key = localStorage.key(i);
-          if (key && key.indexOf(location.pathname) === 0) localStorage.removeItem(key);
+          var mine = !window.USES_PLAYERS || key.slice(-(window.player().id.length + 1)) === "@" + window.player().id;
+          if (key && key.indexOf(location.pathname) === 0 && mine) localStorage.removeItem(key);
         }
       } catch (e) {}
       location.replace(location.pathname + "?v=" + Date.now());
     });
     document.body.appendChild(button);
     document.body.appendChild(dialog);
+  }
+
+  // ---- Players ----
+  // A game that sets window.USES_PLAYERS = true asks "Hvem spiller?" when it opens. Players are
+  // kept only in this iPad's storage (never in the repo) and shared by every game. Games store
+  // per-player data with playerSave/playerLoad and show everyone's best with showRecords(key).
+
+  var PLAYERS_KEY = "spilplatte-players";
+  var CURRENT_KEY = "spilplatte-player";
+  var GUEST = { id: "gaest", name: "Gæst", emoji: "🙂" };
+  var AVATARS = ["🦊", "🐼", "🦄", "🐯", "🐸", "🐙", "🦖", "🐵"];
+  var current = GUEST;
+
+  function readPlayers() {
+    try { return JSON.parse(localStorage.getItem(PLAYERS_KEY)) || []; } catch (e) { return []; }
+  }
+
+  function writePlayers(list) {
+    try { localStorage.setItem(PLAYERS_KEY, JSON.stringify(list)); } catch (e) {}
+  }
+
+  function rememberCurrent(player) {
+    current = player;
+    try { localStorage.setItem(CURRENT_KEY, player.id); } catch (e) {}
+  }
+
+  window.player = function () { return current; };
+  window.playerSave = function (key, value) { window.save(key + "@" + current.id, value); };
+  window.playerLoad = function (key, fallback) { return window.load(key + "@" + current.id, fallback); };
+
+  function el(tag, className, html) {
+    var node = document.createElement(tag);
+    if (className) node.className = className;
+    if (html !== undefined) node.innerHTML = html;
+    return node;
+  }
+
+  function onPress(node, action) {
+    node.addEventListener("touchend", function (event) { event.preventDefault(); action(); });
+    node.addEventListener("click", function (event) { event.preventDefault(); action(); });
+  }
+
+  var overlay = null;
+
+  function closeOverlay() {
+    if (overlay) { document.body.removeChild(overlay); overlay = null; }
+  }
+
+  function openOverlay(title) {
+    closeOverlay();
+    overlay = el("div", "confirm people");
+    overlay.style.display = "flex";
+    var panel = el("div", "confirm-box people-box");
+    panel.appendChild(el("p", "confirm-title", title));
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+    return panel;
+  }
+
+  function pick(player) {
+    var changed = current.id !== player.id;
+    rememberCurrent(player);
+    closeOverlay();
+    playerButton.textContent = player.emoji;
+    if (!started) start();
+    else if (changed) location.replace(location.pathname + "?v=" + Date.now());
+  }
+
+  window.choosePlayer = function () {
+    var panel = openOverlay("Hvem spiller? 🎮");
+    var grid = el("div", "people-grid");
+    readPlayers().concat([GUEST]).forEach(function (player) {
+      var button = el("button", "person" + (player.id === current.id ? " person-current" : ""), '<span class="person-emoji">' + player.emoji + "</span>" + escapeHtml(player.name));
+      onPress(button, function () { pick(player); });
+      grid.appendChild(button);
+    });
+    var add = el("button", "person person-new", '<span class="person-emoji">➕</span>Ny spiller');
+    onPress(add, newPlayerForm);
+    grid.appendChild(add);
+    panel.appendChild(grid);
+  };
+
+  function escapeHtml(text) {
+    return String(text).replace(/[&<>"]/g, function (ch) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]; });
+  }
+
+  function newPlayerForm() {
+    var panel = openOverlay("Ny spiller ✨");
+    var input = el("input", "person-input");
+    input.type = "text";
+    input.maxLength = 12;
+    input.placeholder = "Dit navn";
+    panel.appendChild(input);
+    var chosen = AVATARS[Math.floor(Math.random() * AVATARS.length)];
+    var row = el("div", "avatar-row");
+    AVATARS.forEach(function (avatar) {
+      var button = el("button", "avatar" + (avatar === chosen ? " avatar-chosen" : ""), avatar);
+      onPress(button, function () {
+        chosen = avatar;
+        Array.prototype.forEach.call(row.children, function (child) { child.className = "avatar" + (child.textContent === avatar ? " avatar-chosen" : ""); });
+      });
+      row.appendChild(button);
+    });
+    panel.appendChild(row);
+    var message = el("p", "person-message", "");
+    var saveButton = el("button", "confirm-no", "✔ Gem");
+    onPress(saveButton, function () {
+      var name = input.value.trim();
+      if (!name) { message.textContent = "Skriv dit navn først"; return; }
+      var player = { id: "p" + Date.now(), name: name, emoji: chosen };
+      writePlayers(readPlayers().concat([player]));
+      pick(player);
+    });
+    panel.appendChild(saveButton);
+    var back = el("button", "confirm-yes", "Tilbage");
+    onPress(back, window.choosePlayer);
+    panel.appendChild(back);
+    panel.appendChild(message);
+    input.focus();
+  }
+
+  window.showRecords = function (key, unit) {
+    var panel = openOverlay("🏆 Rekorder");
+    var rows = readPlayers().concat([GUEST]).map(function (player) {
+      var value = 0;
+      try { value = JSON.parse(localStorage.getItem(location.pathname + key + "@" + player.id)) || 0; } catch (e) {}
+      return { player: player, value: value };
+    }).sort(function (a, b) { return b.value - a.value; });
+    var list = el("div", "records");
+    rows.forEach(function (row, i) {
+      var medal = ["🥇", "🥈", "🥉"][i] || "";
+      list.appendChild(el("div", "record-row" + (row.player.id === current.id ? " record-me" : ""),
+        "<span>" + medal + " " + row.player.emoji + " " + escapeHtml(row.player.name) + "</span><span>" + row.value + (unit || "") + "</span>"));
+    });
+    panel.appendChild(list);
+    var close = el("button", "confirm-no", "Luk");
+    onPress(close, closeOverlay);
+    panel.appendChild(close);
+  };
+
+  var playerButton = null;
+
+  function addPlayerButton() {
+    var id = null;
+    try { id = localStorage.getItem(CURRENT_KEY); } catch (e) {}
+    readPlayers().forEach(function (player) { if (player.id === id) current = player; });
+    playerButton = el("a", "home");
+    playerButton.href = "#";
+    playerButton.className = "home player-button";
+    playerButton.textContent = current.emoji;
+    onPress(playerButton, window.choosePlayer);
+    document.body.appendChild(playerButton);
+    window.choosePlayer();
   }
 
   // ---- Loop ----
@@ -332,6 +535,7 @@
     document.body.appendChild(home);
     addStartOver();
     document.body.appendChild(canvas);
+    if (window.USES_PLAYERS) addPlayerButton();
     resize();
     requestAnimationFrame(function (now) { last = now; frame(now); });
   });

@@ -72,6 +72,14 @@ deletes everything the game stored with `save()` and restarts it. So games must 
 progress through `save()`/`load()` (never `localStorage` directly) and must not cover the
 top-left corner (the two buttons) with things to tap.
 
+## Players and records
+A game can set `window.USES_PLAYERS = true;` at the top of `game.js`. The engine then asks
+"Hvem spiller?" when the game opens (profiles + Gæst + "Ny spiller"), adds a player button
+next to ↺, and the game stores per-player data with `playerSave(key, value)` /
+`playerLoad(key, fallback)`; `showRecords(key, unit)` shows everyone's value as a scoreboard,
+and `player()` gives `{ id, name, emoji }`. Profiles live only in the iPad's storage and are
+shared by all games — kids type their own names there, so names never reach the repo.
+
 ## Making a new game
 1. Copy `games/template/` to `games/<kebab-name>/`, set the `<title>`.
 2. Write the game in `game.js` using the helpers in `shared/engine.js`

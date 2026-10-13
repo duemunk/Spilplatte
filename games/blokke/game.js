@@ -1,12 +1,42 @@
 useFont("rund");
+window.USES_PLAYERS = true;
+window.HI_RES = true;
+window.ADAPTIVE = true;
 
 var SIZE = 8;
 var CELL = 72;
-var BOARD_X = 60;
-var BOARD_Y = 110;
-var TRAY_X = 690;
-var TRAY_SLOT_HEIGHT = 200;
-var TRAY_Y = 110;
+var BOARD_PIXELS = 8 * 72;
+var BOARD_X = 0;
+var BOARD_Y = 0;
+var ui = {};
+
+function onLayout() {
+  if (HEIGHT > WIDTH) {
+    var top = Math.max(RESERVED.h + 20, (HEIGHT - (BOARD_PIXELS + 420)) / 2);
+    BOARD_X = (WIDTH - BOARD_PIXELS) / 2;
+    BOARD_Y = top + 110;
+    ui.title = { x: WIDTH / 2, y: top + 20 };
+    ui.score = { x: WIDTH / 2, y: top + 64 };
+    var trayY = BOARD_Y + BOARD_PIXELS + 130;
+    ui.slots = [0, 1, 2].map(function (i) { return { x: WIDTH / 2 + (i - 1) * 245, y: trayY, halfW: 120, halfH: 110 }; });
+    ui.name = { x: WIDTH / 2 - 120, y: trayY + 160 };
+    ui.records = { x: WIDTH / 2 + 20, y: trayY + 130, w: 200, h: 60 };
+    ui.hint = { x: WIDTH / 2, y: trayY + 230 };
+  } else {
+    var left = (WIDTH - (BOARD_PIXELS + 54 + 300)) / 2;
+    if (RESERVED.h > 100) left = Math.max(left, RESERVED.w + 20);
+    var column = left + BOARD_PIXELS + 54 + 150;
+    BOARD_X = left;
+    BOARD_Y = 110;
+    ui.title = { x: BOARD_X + BOARD_PIXELS / 2, y: 40 };
+    ui.score = { x: BOARD_X + BOARD_PIXELS / 2, y: 80 };
+    ui.slots = [0, 1, 2].map(function (i) { return { x: column, y: 110 + i * 200 + 100, halfW: 150, halfH: 100 }; });
+    ui.name = { x: column, y: 24 };
+    ui.records = { x: column - 90, y: 44, w: 180, h: 60 };
+    ui.hint = { x: column, y: HEIGHT - 30 };
+  }
+}
+onLayout();
 var TRAY_CELL = 34;
 var LIFT = 110;
 var CLEAR_IN_SECONDS = 0.3;
@@ -78,13 +108,13 @@ function newGame() {
 }
 
 function remember() {
-  save("game", { board: board, tray: tray, score: score });
-  save("best", best);
+  playerSave("game", { board: board, tray: tray, score: score });
+  playerSave("best", best);
 }
 
 function setup() {
-  best = load("best", 0);
-  var saved = load("game", null);
+  best = playerLoad("best", 0);
+  var saved = playerLoad("game", null);
   if (!saved) { newGame(); return; }
   board = saved.board;
   tray = saved.tray;
@@ -135,7 +165,7 @@ function block(x, y, size, color) {
   box(x + 2, y + 2, size - 4, 6, "rgba(255,255,255,0.3)");
 }
 
-function slotCenter(i) { return { x: TRAY_X + 150, y: TRAY_Y + i * TRAY_SLOT_HEIGHT + TRAY_SLOT_HEIGHT / 2 }; }
+function slotCenter(i) { return ui.slots[i]; }
 
 function dropSpot() {
   var piece = dragging.piece;
@@ -147,9 +177,11 @@ function dropSpot() {
 
 function draw() {
   clear("#14204a");
-  text("Blok Blast", BOARD_X + SIZE * CELL / 2, 40, 40, "#ffd43b");
-  text("Point: " + score, BOARD_X + SIZE * CELL / 2, 80, 26);
-  text("🏆 " + best, TRAY_X + 150, 60, 26, "#ffd43b");
+  text("Blok Blast", ui.title.x, ui.title.y, 40, "#ffd43b");
+  text("Point: " + score, ui.score.x, ui.score.y, 26);
+  text(player().emoji + " " + player().name + "  ·  🏆 " + best, ui.name.x, ui.name.y, 22, "#ffd43b");
+  box(ui.records.x, ui.records.y, ui.records.w, ui.records.h, "#5c7cfa");
+  text("🏆 Rekorder", ui.records.x + ui.records.w / 2, ui.records.y + ui.records.h / 2, 22);
 
   box(BOARD_X - 6, BOARD_Y - 6, SIZE * CELL + 12, SIZE * CELL + 12, "#0d1636");
   for (var r = 0; r < SIZE; r++) {
@@ -194,26 +226,28 @@ function draw() {
   }
 
   if (floaters.length) text(floaters[0].words, BOARD_X + SIZE * CELL / 2, BOARD_Y + SIZE * CELL / 2, 56, "#ffd43b");
-  if (!dragging && score === 0) text("👆 Træk en brik op på brættet", TRAY_X + 150, HEIGHT - 30, 18, "#9fb0e8");
+  if (!dragging && score === 0) text("👆 Træk en brik op på brættet", ui.hint.x, ui.hint.y, 18, "#9fb0e8");
 
   if (over) {
     box(0, 0, WIDTH, HEIGHT, "rgba(0,0,0,0.6)");
-    box(262, 220, 500, 320, "#fff8e7");
-    text("Ingen plads 😢", WIDTH / 2, 290, 44, "#222");
-    text("Point: " + score + "  ·  🏆 " + best, WIDTH / 2, 360, 28, "#444");
-    box(392, 420, 240, 90, "#2f9e44");
-    text("🔁 Nyt spil", WIDTH / 2, 465, 30);
+    var midY = HEIGHT / 2;
+    box(WIDTH / 2 - 250, midY - 160, 500, 320, "#fff8e7");
+    text("Ingen plads 😢", WIDTH / 2, midY - 90, 44, "#222");
+    text("Point: " + score + "  ·  🏆 " + best, WIDTH / 2, midY - 20, 28, "#444");
+    box(WIDTH / 2 - 120, midY + 40, 240, 90, "#2f9e44");
+    text("🔁 Nyt spil", WIDTH / 2, midY + 85, 30);
   }
 }
 
 function onTap(x, y) {
   if (over) {
-    if (x > 392 && x < 632 && y > 420 && y < 510) { newGame(); sfx("hop"); }
+    if (Math.abs(x - WIDTH / 2) < 120 && y > HEIGHT / 2 + 40 && y < HEIGHT / 2 + 130) { newGame(); sfx("hop"); }
     return;
   }
+  if (x > ui.records.x && x < ui.records.x + ui.records.w && y > ui.records.y && y < ui.records.y + ui.records.h) { showRecords("best", " point"); sfx("klik"); return; }
   for (var i = 0; i < tray.length; i++) {
     var center = slotCenter(i);
-    if (tray[i] && Math.abs(x - center.x) < 150 && Math.abs(y - center.y) < TRAY_SLOT_HEIGHT / 2) {
+    if (tray[i] && Math.abs(x - center.x) < center.halfW && Math.abs(y - center.y) < center.halfH) {
       dragging = { piece: tray[i], index: i, x: x, y: y };
       sfx("klik");
       return;

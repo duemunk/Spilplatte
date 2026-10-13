@@ -14,7 +14,10 @@ html, body {
   -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
 }
-.launcher { padding: 24px; box-sizing: border-box; overflow-y: auto; }
+.launcher {
+  padding: calc(24px + env(safe-area-inset-top)) calc(24px + env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) calc(24px + env(safe-area-inset-left));
+  box-sizing: border-box; overflow-y: auto;
+}
 .launcher h1 { font-family: "Press Start 2P", -apple-system, sans-serif; font-size: 36px; font-weight: normal; margin: 16px 0 24px; text-align: center; }
 .tiles { display: flex; flex-wrap: wrap; justify-content: center; }
 .tile {
@@ -30,19 +33,20 @@ html, body {
 .game { overflow: hidden; position: fixed; top: 0; left: 0; right: 0; bottom: 0; height: auto; touch-action: none; }
 .game canvas { display: block; position: absolute; }
 .home {
-  position: absolute; top: 12px; left: 12px; z-index: 2;
+  position: absolute; top: calc(12px + env(safe-area-inset-top)); left: calc(12px + env(safe-area-inset-left)); z-index: 2;
   width: 64px; height: 64px; border-radius: 32px; background: rgba(0,0,0,.35);
   color: #fff; font-size: 34px; line-height: 64px; text-align: center; text-decoration: none;
 }
 .launcher .subtitle { text-align: center; font-size: 24px; margin: -12px 0 16px; opacity: .85; }
 .tile .icon { width: 110px; height: 110px; border-radius: 24px; box-shadow: 0 4px 0 rgba(0,0,0,.25); }
 .refresh {
-  position: fixed; top: 16px; right: 16px; min-width: 64px; height: 64px; padding: 0 20px;
+  position: fixed; top: calc(16px + env(safe-area-inset-top)); right: calc(16px + env(safe-area-inset-right)); min-width: 64px; height: 64px; padding: 0 20px;
   border: 0; border-radius: 32px; background: rgba(255,255,255,.15); color: #fff;
   font-size: 22px; font-weight: bold; box-sizing: border-box;
 }
 .refresh:active { background: rgba(255,255,255,.35); }
-.restart { left: 88px; font-weight: bold; }
+.restart { left: calc(88px + env(safe-area-inset-left)); font-weight: bold; }
+.player-button { left: calc(164px + env(safe-area-inset-left)); }
 .confirm {
   display: none; position: fixed; z-index: 3; top: 0; left: 0; right: 0; bottom: 0;
   background: rgba(0,0,0,.6); align-items: center; justify-content: center;
@@ -61,9 +65,9 @@ html, body {
 .confirm-no { background: #2f9e44; }
 .launcher h1 .logo { width: 56px; height: 56px; border-radius: 13px; vertical-align: -14px; margin-right: 18px; }
 @media (max-width: 900px) { .launcher h1 { margin-top: 96px; } }
-.unlock { top: 92px; font-size: 18px; background: rgba(255,255,255,.08); }
+.unlock { top: calc(92px + env(safe-area-inset-top)); font-size: 18px; background: rgba(255,255,255,.08); }
 .code-panel {
-  display: none; position: fixed; top: 168px; right: 16px; z-index: 2; width: 260px; padding: 16px;
+  display: none; position: fixed; top: calc(168px + env(safe-area-inset-top)); right: calc(16px + env(safe-area-inset-right)); z-index: 2; width: 260px; padding: 16px;
   border-radius: 24px; background: #2a2d45; box-sizing: border-box; text-align: center;
 }
 .code-panel input {
@@ -77,3 +81,31 @@ html, body {
 .code-panel p { min-height: 22px; margin: 10px 0 0; font-size: 18px; color: #ffd34e; }
 @media (max-width: 900px) { .launcher h1 { margin-top: 168px; } }
 .refresh { z-index: 2; }
+.people { z-index: 4; }
+.people-box { width: 640px; }
+.people-grid { display: flex; flex-wrap: wrap; justify-content: center; }
+.confirm-box .person { display: inline-block;
+  width: 170px; min-height: 110px; margin: 8px; border: 0; border-radius: 24px; background: #4c6ef5;
+  color: #fff; font-size: 22px; font-weight: bold; box-shadow: 0 5px 0 rgba(0,0,0,.25);
+}
+.confirm-box .person-current { background: #2f9e44; }
+.confirm-box .person-new { background: #868e96; }
+.person-emoji { display: block; font-size: 44px; }
+.person-input {
+  width: 100%; height: 68px; box-sizing: border-box; border: 2px solid #ccc; border-radius: 16px;
+  font-size: 30px; text-align: center; font-family: -apple-system, sans-serif;
+}
+.avatar-row { display: flex; flex-wrap: wrap; justify-content: center; margin: 12px 0; }
+.confirm-box .avatar { display: inline-block; min-height: 0; color: #222; width: 64px; height: 64px; margin: 4px; border: 0; border-radius: 16px; background: #eee; font-size: 36px; }
+.confirm-box .avatar-chosen { background: #ffd34e; }
+.person-message { color: #c53030; font-size: 20px; min-height: 24px; margin: 8px 0 0; }
+.records { text-align: left; margin-bottom: 8px; }
+.record-row { display: flex; justify-content: space-between; font-size: 26px; padding: 10px 14px; border-radius: 14px; }
+.record-me { background: #fff1b8; }
+@media (max-width: 500px) {
+  .launcher h1 { font-size: 22px; }
+  .launcher h1 .logo { width: 40px; height: 40px; vertical-align: -10px; margin-right: 10px; }
+  .tile { width: 150px; height: 150px; margin: 8px; border-radius: 26px; }
+  .tile .icon { width: 82px; height: 82px; border-radius: 18px; }
+  .tile .title { font-size: 19px; margin-top: 6px; }
+}
