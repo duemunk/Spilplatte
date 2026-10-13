@@ -1,4 +1,5 @@
 useFont("kridt");
+window.HI_RES = true;
 
 var theme = { grass: "#6bb35a", road: "#6e6e73", line: "#ffffff", brick: "#b5523b", text: "#fff" };
 

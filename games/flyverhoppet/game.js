@@ -1,4 +1,5 @@
 useFont("racer");
+window.HI_RES = true;
 
 var theme = { sky: "#5fb4f0", horizon: "#a9d8fb", grass: "#5f9e4a", concrete: "#a3a3a8", edge: "#5c5c62", text: "#fff" };
 

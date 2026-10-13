@@ -1,4 +1,5 @@
 useFont("kridt");
+window.HI_RES = true;
 
 // Copy this folder to start a new game.
 

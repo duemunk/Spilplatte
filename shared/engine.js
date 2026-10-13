@@ -176,7 +176,7 @@
     var key = size + "|" + color + "|" + words;
     var cached = glyphs[key];
     if (cached) return cached;
-    if (glyphCount >= MAX_CACHED_GLYPHS) { glyphs = {}; glyphCount = 0; }
+    if (glyphCount >= (glyphScale > 1.5 ? MAX_CACHED_GLYPHS / 2 : MAX_CACHED_GLYPHS)) { glyphs = {}; glyphCount = 0; }
     var pixels = Math.round(size * glyphScale);
     var font = window.fontFor(pixels);
     var c = document.createElement("canvas");

@@ -1,4 +1,5 @@
 useFont("racer");
+window.HI_RES = true;
 
 var BLOCKS = 6;
 var BLOCK = 520;

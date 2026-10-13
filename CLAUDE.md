@@ -15,8 +15,9 @@ at https://duemunk.github.io/Spilplatte/. All building happens through Claude Co
 - Touch events only (no pointer events). Audio starts after the first tap (engine handles it).
 
 ## Performance (original iPad Air, A7, 1 GB RAM)
-Every game must run smoothly on the original iPad Air. The engine renders at 1x and caches
-emoji/text as bitmaps; games must keep it cheap too:
+Every game must run smoothly on the original iPad Air. Games set `window.HI_RES = true` (the
+template does) to render at the screen's pixel density, which costs up to 4x the pixels on that
+iPad; the engine caches emoji/text as bitmaps. Games must keep drawing cheap:
 - Draw with the engine helpers (`emoji`, `text`, `picture`, `box`, `circle`). No `shadowBlur`,
   `filter`, gradients or `globalCompositeOperation` per frame; no per-pixel `getImageData` work.
 - Keep on-screen objects modest (aim for under ~150 moving things) and remove anything off-screen.

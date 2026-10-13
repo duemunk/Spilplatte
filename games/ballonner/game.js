@@ -1,4 +1,5 @@
 useFont("tusch");
+window.HI_RES = true;
 
 var balloons = [];
 var points = 0;

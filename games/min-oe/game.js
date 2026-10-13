@@ -1,4 +1,5 @@
 useFont("rund");
+window.HI_RES = true;
 
 var theme = { sea: "#1ea7c9", sand: "#f5e1a4", grass: "#8fd16a", text: "#fff" };
 
