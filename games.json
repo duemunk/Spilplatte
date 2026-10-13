@@ -1,7 +1,8 @@
 [
-  {"title":"Min Ø","folder":"min-oe","emoji":"🏝️","icon":"icon.png","color":"#1ea7c9","author":{"iv":"wHYearMMPY52c3MS","data":"HcsPrvBhO6cQI6HpjIlc1nLBLOoI4w=="}},
-  {"title":"Flugtbilen","folder":"flugtbilen","emoji":"🚓","icon":"icon.png","author":{"iv":"w7/uUfWgnGQKRl9W","data":"5w9MWcJhhtR7KOS9CGFpTQy5wRN5"},"color":"#d7262e"},
-  {"title":"Flyverhoppet","folder":"flyverhoppet","emoji":"🏎️","icon":"icon.png","author":{"iv":"Tm5sQM8IRfbbttnn","data":"mUjv+/LseKTNg2+5YdSHCppnRtXa"},"color":"#3d8fe0"},
-  {"title":"Min By","folder":"min-by","emoji":"🏘️","icon":"icon.png","author":{"iv":"7eSvhzyIYWj34qRo","data":"9i8kmxDuBSpZTKqUmvzAsXx0n9SDMA=="},"color":"#5a9e4b"},
-  {"title":"Ballonner","folder":"ballonner","emoji":"🎈","author":{"iv":"42xFCs1xK3PrXvr2","data":"GN9DV7DLhn5/WUpD8tH9dFEaBg=="},"color":"#e94e77","icon":"icon.png"}
+  {"title":"2048","folder":"2048","emoji":"🔢","icon":"icon.png","color":"#5b3fa0","author":{"iv":"ge/0bEHAS+/+MBEW","data":"MlYxB5Qw+GZMKh0MAEo+KIWZxqkU"}},
+  {"title":"Min Ø","folder":"min-oe","emoji":"🏝️","icon":"icon.png","color":"#1ea7c9","author":{"iv":"rP+WbdlRh/HCrp0i","data":"GICNMEHol8x4jAxHHa/npQPdMpuUeQ=="}},
+  {"title":"Flugtbilen","folder":"flugtbilen","emoji":"🚓","icon":"icon.png","author":{"iv":"roUGV4UmTgeo40be","data":"2+IZ6kKKz39oTgPWzmGThb2UnVq/"},"color":"#d7262e"},
+  {"title":"Flyverhoppet","folder":"flyverhoppet","emoji":"🏎️","icon":"icon.png","author":{"iv":"gI4GRRwjvlKbaJLi","data":"VTJ8ST8KI0cYCmurG6sdOMygFNM7"},"color":"#3d8fe0"},
+  {"title":"Min By","folder":"min-by","emoji":"🏘️","icon":"icon.png","author":{"iv":"TTEDbVWPVa/aXjTR","data":"X7rPHHEHnsLsp9y3WWuT+iVWhgUuuQ=="},"color":"#5a9e4b"},
+  {"title":"Ballonner","folder":"ballonner","emoji":"🎈","author":{"iv":"WwfZQibOhRzk2Ubh","data":"zoO/6CKsKX8+33oT0ot/QxE92g=="},"color":"#e94e77","icon":"icon.png"}
 ]

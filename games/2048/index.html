@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="da">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Spilplatte">
+  <title>2048</title>
+  <link rel="apple-touch-icon" href="../../shared/icons/icon-180.png">
+  <link rel="apple-touch-icon" sizes="152x152" href="../../shared/icons/icon-152.png">
+  <link rel="apple-touch-icon" sizes="167x167" href="../../shared/icons/icon-167.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="../../shared/icons/icon-180.png">
+  <link rel="icon" type="image/png" href="../../shared/icons/icon-192.png">
+  <meta name="theme-color" content="#1d1f33">
+  <link rel="manifest" href="../../manifest.json">
+</head>
+<body>
+  <script>
+    // Load the scripts fresh every time, so new versions show up without a reload button.
+    var version = Date.now();
+    document.write('<link rel="stylesheet" href="../../shared/style.css?v=' + version + '">');
+    document.write('<script src="../../shared/engine.js?v=' + version + '"><\/script>');
+    document.write('<script src="game.js?v=' + version + '"><\/script>');
+  </script>
+</body>
+</html>
