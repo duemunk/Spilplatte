@@ -120,3 +120,7 @@ html, body {
 .people-top .person-message { margin: 6px 0 0; }
 .people-top .avatar-row { margin: 4px 0 12px; }
 .people-top .confirm-yes { background: #868e96; min-height: 64px; font-size: 22px; }
+.confirm-box .avatar, .confirm-box .person, .confirm-box .save-person {
+  -webkit-appearance: none; padding: 0; text-align: center;
+}
+.confirm-box .avatar { display: inline-flex; align-items: center; justify-content: center; line-height: 1; }
