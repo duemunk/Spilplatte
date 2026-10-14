@@ -436,13 +436,23 @@
     return String(text).replace(/[&<>"]/g, function (ch) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]; });
   }
 
+  // The keyboard covers the lower half of the screen, so everything needed to finish (name,
+  // ✔ Gem and the animal) sits at the top, and Return also saves.
   function newPlayerForm() {
     var panel = openOverlay("Ny spiller ✨");
+    overlay.className += " people-top";
+    var nameRow = el("div", "name-row");
     var input = el("input", "person-input");
     input.type = "text";
     input.maxLength = 12;
     input.placeholder = "Dit navn";
-    panel.appendChild(input);
+    input.setAttribute("enterkeyhint", "done");
+    nameRow.appendChild(input);
+    var saveButton = el("button", "save-person", "✔ Gem");
+    nameRow.appendChild(saveButton);
+    panel.appendChild(nameRow);
+    var message = el("p", "person-message", "");
+    panel.appendChild(message);
     var chosen = AVATARS[Math.floor(Math.random() * AVATARS.length)];
     var row = el("div", "avatar-row");
     AVATARS.forEach(function (avatar) {
@@ -454,20 +464,19 @@
       row.appendChild(button);
     });
     panel.appendChild(row);
-    var message = el("p", "person-message", "");
-    var saveButton = el("button", "confirm-no", "✔ Gem");
-    onPress(saveButton, function () {
+    function saveNewPlayer() {
       var name = input.value.trim();
-      if (!name) { message.textContent = "Skriv dit navn først"; return; }
+      if (!name) { message.textContent = "Skriv dit navn først"; input.focus(); return; }
+      input.blur();
       var player = { id: "p" + Date.now(), name: name, emoji: chosen };
       writePlayers(readPlayers().concat([player]));
       pick(player);
-    });
-    panel.appendChild(saveButton);
+    }
+    onPress(saveButton, saveNewPlayer);
+    input.addEventListener("keydown", function (event) { if (event.keyCode === 13) { event.preventDefault(); saveNewPlayer(); } });
     var back = el("button", "confirm-yes", "Tilbage");
-    onPress(back, window.choosePlayer);
+    onPress(back, function () { input.blur(); window.choosePlayer(); });
     panel.appendChild(back);
-    panel.appendChild(message);
     input.focus();
   }
 

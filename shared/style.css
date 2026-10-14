@@ -109,3 +109,14 @@ html, body {
   .tile .icon { width: 82px; height: 82px; border-radius: 18px; }
   .tile .title { font-size: 19px; margin-top: 6px; }
 }
+.people-top { align-items: flex-start; padding-top: calc(16px + env(safe-area-inset-top)); box-sizing: border-box; }
+.people-top .confirm-title { margin-bottom: 8px; }
+.name-row { display: flex; }
+.name-row .person-input { flex: 1; width: auto; }
+.confirm-box .save-person {
+  display: block; width: 150px; min-height: 68px; margin: 0 0 0 10px; border: 0; border-radius: 16px;
+  background: #2f9e44; color: #fff; font-size: 24px; font-weight: bold;
+}
+.people-top .person-message { margin: 6px 0 0; }
+.people-top .avatar-row { margin: 4px 0 12px; }
+.people-top .confirm-yes { background: #868e96; min-height: 64px; font-size: 22px; }
