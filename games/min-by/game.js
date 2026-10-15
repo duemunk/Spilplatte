@@ -1,5 +1,7 @@
 useFont("kridt");
 window.HI_RES = true;
+window.ADAPTIVE = true;
+window.USES_PLAYERS = true;
 
 var theme = { grass: "#6bb35a", road: "#6e6e73", line: "#ffffff", brick: "#b5523b", text: "#fff" };
 
@@ -140,7 +142,119 @@ var GROW_BASE_PRICE_IN_KR = 80;
 var GROW_PRICE_STEP_IN_KR = 60;
 var cityLevel = 0;
 var camera = { x: 0, y: 0 };
-var bounds = { left: 0, top: 0, right: WIDTH, bottom: HEIGHT };
+var bounds = { left: 0, top: 0, right: 1024, bottom: 768 };
+// The inside of the house and the menus keep their 1024 × 768 layouts, scaled and centred.
+var ROOM_W = 1024;
+var ROOM_H = 768;
+
+function roomTransform() {
+  var scale = Math.min(WIDTH / ROOM_W, HEIGHT / ROOM_H);
+  return { x: (WIDTH - ROOM_W * scale) / 2, y: (HEIGHT - ROOM_H * scale) / 2, scale: scale };
+}
+
+// In tall portrait screens the house gets its own layout: a taller wall and floor that use
+// the whole screen. Furniture keeps its saved room coordinates; they are mapped onto the tall
+// floor when drawn and mapped back when touched.
+var ROOM_FLOOR_LEFT = 70;
+var ROOM_FLOOR_RIGHT = 954;
+var ROOM_WALL_BOTTOM = FLOOR_TOP - 20;
+
+function tallHouse() {
+  if (HEIGHT <= WIDTH) return null;
+  var top = RESERVED.h + 10;
+  if (HEIGHT - top < 900) return null;
+  var wallTop = top + 50;
+  var floorTop = wallTop + 280;
+  var floorBottom = HEIGHT - 160;
+  var arrowsY = (floorTop + floorBottom) / 2 - 60;
+  return {
+    top: top, wallTop: wallTop, floorTop: floorTop, floorBottom: floorBottom,
+    left: { x: 10, y: arrowsY, w: 90, h: 120 }, right: { x: WIDTH - 100, y: arrowsY, w: 90, h: 120 },
+    buttons: [0, 1, 2].map(function (i) { return { x: WIDTH / 2 - 350 + i * 236, y: HEIGHT - 120, w: 228, h: 90 }; })
+  };
+}
+
+function houseToScreen(tall, x, y) {
+  var sx = 20 + (x - ROOM_FLOOR_LEFT) / (ROOM_FLOOR_RIGHT - ROOM_FLOOR_LEFT) * (WIDTH - 40);
+  var sy = y < ROOM_WALL_BOTTOM
+    ? tall.wallTop + y / ROOM_WALL_BOTTOM * (tall.floorTop - tall.wallTop)
+    : tall.floorTop + (y - ROOM_WALL_BOTTOM) / (FLOOR_BOTTOM - ROOM_WALL_BOTTOM) * (tall.floorBottom - tall.floorTop);
+  return { x: sx, y: sy };
+}
+
+function screenToHouse(tall, sx, sy) {
+  var x = ROOM_FLOOR_LEFT + (sx - 20) / (WIDTH - 40) * (ROOM_FLOOR_RIGHT - ROOM_FLOOR_LEFT);
+  var y = sy < tall.floorTop
+    ? (sy - tall.wallTop) / (tall.floorTop - tall.wallTop) * ROOM_WALL_BOTTOM
+    : ROOM_WALL_BOTTOM + (sy - tall.floorTop) / (tall.floorBottom - tall.floorTop) * (FLOOR_BOTTOM - ROOM_WALL_BOTTOM);
+  return { x: Math.max(110, Math.min(914, x)), y: Math.max(0, Math.min(FLOOR_BOTTOM, y)) };
+}
+
+function drawInsideTall(tall) {
+  var room = ROOMS[roomIndex];
+  clear("#8b5a2b");
+  box(0, tall.wallTop - 50, WIDTH, tall.floorTop - tall.wallTop + 50, room.wall);
+  for (var x = 0; x < WIDTH; x += 80) box(x, tall.wallTop - 50, 40, tall.floorTop - tall.wallTop + 50, room.stripe);
+  box(0, tall.floorTop, WIDTH, tall.floorBottom - tall.floorTop + 40, "#c08a52");
+  for (var y = tall.floorTop + 50; y < tall.floorBottom + 40; y += 50) box(0, y, WIDTH, 3, "#a87443");
+  box(0, tall.floorTop - 12, WIDTH, 12, "#8b5a2b");
+  box(WIDTH / 2 - 130, tall.wallTop + 40, 260, 150, "#bee3f8");
+  box(WIDTH / 2 - 5, tall.wallTop + 40, 10, 150, "#fff");
+  box(WIDTH / 2 - 130, tall.wallTop + 110, 260, 10, "#fff");
+  text(room.emoji + " " + room.name + "  " + (roomIndex + 1) + "/" + ROOMS.length, WIDTH / 2, tall.wallTop + 10, 30, "#5a3825");
+
+  var everything = furnitureHere().slice();
+  var tank = aquarium();
+  if (tank) everything.push(tank);
+  everything.sort(function (a, b) { return a.y - b.y; });
+  everything.forEach(function (item) {
+    var p = houseToScreen(tall, item.x, item.y);
+    drawFurniture({ kind: item.kind, x: p.x, y: p.y, fish: item.fish });
+  });
+  if (everything.length === 0) text("Tryk på 🛒 Møbler for at købe møbler", WIDTH / 2, (tall.floorTop + tall.floorBottom) / 2, 26, "#fff");
+
+  petFollowers.forEach(function (pet) {
+    var p = houseToScreen(tall, pet.x, pet.y);
+    var size = pet.kind === "hest" ? 80 : 46;
+    emoji(PETS[pet.kind].emoji, p.x, p.y, size);
+    if (pet.pet.sick) drawSick(p.x, p.y - size / 2);
+    else if (pet.pet.hunger >= HUNGRY_AT) drawHungry(p.x, p.y - size / 2);
+  });
+  var me = houseToScreen(tall, hero.x, hero.y);
+  emoji("👧", me.x, me.y, 70);
+  drawSpeech(me.x, me.y);
+  floaters.forEach(function (f) { var p = houseToScreen(tall, f.x, f.y); text(f.words, p.x, p.y, 28, f.color); });
+
+  bigButton(tall.left.x, tall.left.y, tall.left.w, tall.left.h, "⬅️", "#8b5a2b");
+  bigButton(tall.right.x, tall.right.y, tall.right.w, tall.right.h, "➡️", "#8b5a2b");
+  box(0, HEIGHT - 135, WIDTH, 135, "rgba(0,0,0,0.25)");
+  var labels = [["🛒 Møbler", "#b7791f"], ["🐾 Dyr", "#d53f8c"], ["🚪 Gå ud", "#2f855a"]];
+  tall.buttons.forEach(function (r, i) { bigButton(r.x, r.y, r.w, r.h, labels[i][0], labels[i][1]); });
+}
+
+function inBox(x, y, r) { return x > r.x && x < r.x + r.w && y > r.y && y < r.y + r.h; }
+
+function tapInsideTall(tall, sx, sy) {
+  if (inBox(sx, sy, tall.buttons[0])) { menu = { kind: "furniture" }; sfx("klik"); return; }
+  if (inBox(sx, sy, tall.buttons[1])) { menu = { kind: "pets" }; sfx("klik"); return; }
+  if (inBox(sx, sy, tall.buttons[2])) { goOutside(); return; }
+  if (inBox(sx, sy, tall.left) || inBox(sx, sy, tall.right)) {
+    roomIndex = (roomIndex + (inBox(sx, sy, tall.left) ? -1 : 1) + ROOMS.length) % ROOMS.length;
+    pendingAction = null;
+    sfx("klik");
+    return;
+  }
+  if (sy > HEIGHT - 135) return;
+  var p = screenToHouse(tall, sx, sy);
+  tapInside(p.x, p.y);
+}
+
+function menuOffset() { return { x: WIDTH / 2 - 512, y: HEIGHT / 2 - 384 }; }
+
+function follow(min, max, size, target) {
+  if (max - min <= size) return (min + max - size) / 2;
+  return Math.max(min, Math.min(max - size, target - size / 2));
+}
 
 function roadX(k) { return ROAD_X + k * STEP_X; }
 function roadY(k) { return ROAD_Y + k * STEP_Y; }
@@ -158,7 +272,7 @@ function ringBlocks(level) {
 
 function setCitySize() {
   bounds = cityLevel === 0
-    ? { left: 0, top: 0, right: WIDTH, bottom: HEIGHT }
+    ? { left: 0, top: 0, right: 1024, bottom: 768 }
     : { left: roadX(-1 - cityLevel) + 40, top: roadY(-1 - cityLevel) + 40, right: roadX(cityLevel + 1) + 20, bottom: roadY(cityLevel + 1) + 20 };
   trees = BASE_TREES.slice();
   for (var level = 1; level <= cityLevel; level++) {
@@ -182,17 +296,18 @@ function growCity() {
     plots.push({ x: block.left + 260, y: block.top + 110 });
   });
   setCitySize();
-  float("Byen blev større! +" + (plots.length - before) + " grunde 🎉", player.x, player.y - 70, "#fff");
+  float("Byen blev større! +" + (plots.length - before) + " grunde 🎉", hero.x, hero.y - 70, "#fff");
   sfx("hammer");
   remember();
 }
 
+// Floats placed on screen (x, y in screen units for the town; room units inside the house).
 function townFloat(words, x, y, color) {
-  if (scene === "town") float(words, camera.x + x, camera.y + y, color);
-  else float(words, x, y, color);
+  if (scene === "town") float(words, camera.x + (x === null ? WIDTH / 2 : x), camera.y + y, color);
+  else float(words, x === null ? ROOM_W / 2 : x, y, color);
 }
 
-var player = { x: 512, y: 410, targetX: 512, targetY: 410 };
+var hero = { x: 512, y: 410, targetX: 512, targetY: 410 };
 var money = 0;
 var shops = [];
 var coins = [];
@@ -211,7 +326,10 @@ var roomIndex = 0;
 var food = 0;
 
 function setup() {
-  var saved = load("state", null);
+  // Old shared progress (from before players) goes to the first named player who opens the game.
+  var legacy = !load("legacyClaimed", false) && player().id !== "gaest";
+  if (legacy) save("legacyClaimed", true);
+  var saved = playerLoad("state", legacy ? load("state", null) : null);
   if (saved) {
     money = saved.money;
     shops = saved.shops;
@@ -232,10 +350,11 @@ function setup() {
   });
   rebuildFollowers();
   for (var i = 0; i < 5; i++) addCoin();
+  if (legacy && saved) remember();
 }
 
 function remember() {
-  save("state", {
+  playerSave("state", {
     money: money,
     food: food,
     cityLevel: cityLevel,
@@ -280,7 +399,7 @@ function rebuildFollowers() {
     shop.pets.forEach(function (pet) {
       if (pet.kind === "fisk") return;
       var previous = old[petFollowers.length];
-      petFollowers.push({ pet: pet, kind: pet.kind, x: previous ? previous.x : player.x, y: previous ? previous.y : player.y });
+      petFollowers.push({ pet: pet, kind: pet.kind, x: previous ? previous.x : hero.x, y: previous ? previous.y : hero.y });
     });
   });
 }
@@ -319,19 +438,19 @@ function float(words, x, y, color) {
 }
 
 function walk(dt) {
-  var dx = player.targetX - player.x;
-  var dy = player.targetY - player.y;
+  var dx = hero.targetX - hero.x;
+  var dy = hero.targetY - hero.y;
   var length = Math.sqrt(dx * dx + dy * dy);
   if (length > 4) {
     var step = Math.min(length, PLAYER_SPEED * dt);
-    player.x += dx / length * step;
-    player.y += dy / length * step;
+    hero.x += dx / length * step;
+    hero.y += dy / length * step;
   }
 }
 
 function followPets(dt) {
-  var leaderX = player.x;
-  var leaderY = player.y;
+  var leaderX = hero.x;
+  var leaderY = hero.y;
   petFollowers.forEach(function (pet) {
     var dx = leaderX - pet.x;
     var dy = leaderY - pet.y;
@@ -349,7 +468,7 @@ function followPets(dt) {
 function updateInside(dt) {
   if (!dragging) walk(dt);
   followPets(dt);
-  if (pendingAction && distance(player.x, player.y, pendingAction.x, pendingAction.y + 50) < 70) {
+  if (pendingAction && distance(hero.x, hero.y, pendingAction.x, pendingAction.y + 50) < 70) {
     useFurniture(pendingAction);
     pendingAction = null;
   }
@@ -392,13 +511,11 @@ function update(dt) {
 
   walk(dt);
   followPets(dt);
-  if (cityLevel > 0) {
-    camera.x = Math.max(bounds.left, Math.min(bounds.right - WIDTH, player.x - WIDTH / 2));
-    camera.y = Math.max(bounds.top, Math.min(bounds.bottom - HEIGHT, player.y - HEIGHT / 2));
-  }
+  camera.x = follow(bounds.left, bounds.right, WIDTH, hero.x);
+  camera.y = follow(bounds.top, bounds.bottom, HEIGHT, hero.y);
 
   for (var i = coins.length - 1; i >= 0; i--) {
-    if (distance(player.x, player.y, coins[i].x, coins[i].y) < 40) {
+    if (distance(hero.x, hero.y, coins[i].x, coins[i].y) < 40) {
       money += COIN_VALUE_IN_KR;
       float("+" + COIN_VALUE_IN_KR + " kr", coins[i].x, coins[i].y, "#ffd34e");
       coins.splice(i, 1);
@@ -527,7 +644,7 @@ function drawChoice(x, y, symbol, name, priceInKr, color) {
 function choiceX(i) {
   var perRow = compactMenu() ? 6 : Math.min(4, menu && menu.kind !== "sell" ? menuChoices().length : 4);
   var spacing = compactMenu() ? 112 : 173;
-  return WIDTH / 2 + ((i % perRow) - (perRow - 1) / 2) * spacing;
+  return ROOM_W / 2 + ((i % perRow) - (perRow - 1) / 2) * spacing;
 }
 function choiceY(i) {
   if (compactMenu()) return 316 + Math.floor(i / 6) * 112;
@@ -567,13 +684,21 @@ function menuChoices() {
 
 function drawMenu() {
   box(0, 0, WIDTH, HEIGHT, "rgba(0,0,0,0.55)");
+  var offset = menuOffset();
+  ctx.save();
+  ctx.translate(offset.x, offset.y);
+  drawMenuPanel();
+  ctx.restore();
+}
+
+function drawMenuPanel() {
   box(162, 134, 700, 520, "#fff8e7");
   box(790, 140, 64, 64, "#e2d6bd");
   text("✖️", 822, 172, 34);
   if (menu.kind === "sell") {
     var customer = menu.shop.customer;
-    text(customer.face + (menu.shop.type === "hospital" ? " Mit dyr er sygt. Hvad skal det have?" : " Må jeg få " + customer.item.name + "?"), WIDTH / 2, 200, menu.shop.type === "hospital" ? 28 : 34, "#222");
-    text("Tryk på den rigtige ting", WIDTH / 2, 250, 24, "#555");
+    text(customer.face + (menu.shop.type === "hospital" ? " Mit dyr er sygt. Hvad skal det have?" : " Må jeg få " + customer.item.name + "?"), ROOM_W / 2, 200, menu.shop.type === "hospital" ? 28 : 34, "#222");
+    text("Tryk på den rigtige ting", ROOM_W / 2, 250, 24, "#555");
     SHOP_TYPES[menu.shop.type].items.forEach(function (item, i) {
       var x = 252 + i * 173;
       box(x - 75, 300, 150, 220, "#ffffff");
@@ -584,9 +709,9 @@ function drawMenu() {
   }
   var titles = { build: "Hvad vil du bygge?", furniture: "Hvilket møbel vil du købe?", pets: "Hvilket dyr vil du have?", groceries: "🛒 Købmanden", stable: "🐴 Køb din egen hest", cakes: "🧁 Køb en kage til dig selv", vet: "🏥 Hvilket dyr skal gøres rask?" };
   var colors = { build: null, furniture: "#b7791f", pets: "#d53f8c", groceries: "#3182ce", stable: "#b07d48", cakes: "#f783ac", vet: "#4dabf7" };
-  text(titles[menu.kind], WIDTH / 2, 190, 36, "#222");
-  text("Du har " + money + " kr", WIDTH / 2, 232, 24, "#555");
-  if (menu.kind === "groceries") text("Mad til dine dyr — fodr dem, når de er sultne 🍖", WIDTH / 2, 560, 22, "#555");
+  text(titles[menu.kind], ROOM_W / 2, 190, 36, "#222");
+  text("Du har " + money + " kr", ROOM_W / 2, 232, 24, "#555");
+  if (menu.kind === "groceries") text("Mad til dine dyr — fodr dem, når de er sultne 🍖", ROOM_W / 2, 560, 22, "#555");
   menuChoices().forEach(function (choice, i) {
     drawChoice(choiceX(i), choiceY(i), choice.sign || choice.emoji, choice.name, choice.priceInKr, colors[menu.kind] || choice.roof);
   });
@@ -643,30 +768,30 @@ function drawFurniture(item) {
 
 function drawInside() {
   var room = ROOMS[roomIndex];
-  box(0, 0, WIDTH, FLOOR_TOP, room.wall);
-  for (var x = 0; x < WIDTH; x += 80) box(x, 0, 40, FLOOR_TOP, room.stripe);
-  box(0, FLOOR_TOP, WIDTH, HEIGHT - FLOOR_TOP, "#c08a52");
-  for (var y = FLOOR_TOP + 50; y < HEIGHT; y += 50) box(0, y, WIDTH, 3, "#a87443");
-  box(0, FLOOR_TOP - 12, WIDTH, 12, "#8b5a2b");
+  box(0, 0, ROOM_W, FLOOR_TOP, room.wall);
+  for (var x = 0; x < ROOM_W; x += 80) box(x, 0, 40, FLOOR_TOP, room.stripe);
+  box(0, FLOOR_TOP, ROOM_W, ROOM_H - FLOOR_TOP, "#c08a52");
+  for (var y = FLOOR_TOP + 50; y < ROOM_H; y += 50) box(0, y, ROOM_W, 3, "#a87443");
+  box(0, FLOOR_TOP - 12, ROOM_W, 12, "#8b5a2b");
   box(380, 60, 260, 150, "#bee3f8");
   box(505, 60, 10, 150, "#fff");
   box(380, 130, 260, 10, "#fff");
-  text(room.emoji + " " + room.name + "  " + (roomIndex + 1) + "/" + ROOMS.length, WIDTH / 2, 30, 30, "#5a3825");
+  text(room.emoji + " " + room.name + "  " + (roomIndex + 1) + "/" + ROOMS.length, ROOM_W / 2, 30, 30, "#5a3825");
 
   var everything = furnitureHere().slice();
   var tank = aquarium();
   if (tank) everything.push(tank);
   everything.sort(function (a, b) { return a.y - b.y; });
   everything.forEach(drawFurniture);
-  if (everything.length === 0) text("Tryk på 🛒 Møbler for at købe møbler", WIDTH / 2, 420, 26, "#fff");
+  if (everything.length === 0) text("Tryk på 🛒 Møbler for at købe møbler", ROOM_W / 2, 420, 26, "#fff");
 
   drawPets();
-  emoji("👧", player.x, player.y, 70);
-  drawSpeech(player.x, player.y);
+  emoji("👧", hero.x, hero.y, 70);
+  drawSpeech(hero.x, hero.y);
 
   bigButton(12, 400, 90, 120, "⬅️", "#8b5a2b");
-  bigButton(WIDTH - 102, 400, 90, 120, "➡️", "#8b5a2b");
-  box(0, 660, WIDTH, 108, "rgba(0,0,0,0.25)");
+  bigButton(ROOM_W - 102, 400, 90, 120, "➡️", "#8b5a2b");
+  box(0, 660, ROOM_W, 108, "rgba(0,0,0,0.25)");
   bigButton(150, 672, 220, 84, "🛒 Møbler", "#b7791f");
   bigButton(402, 672, 220, 84, "🐾 Dyr", "#d53f8c");
   bigButton(654, 672, 220, 84, "🚪 Gå ud", "#2f855a");
@@ -679,9 +804,24 @@ function bigButton(x, y, width, height, label, color) {
 }
 
 function draw() {
+  if (scene === "inside" && tallHouse()) {
+    drawInsideTall(tallHouse());
+    box(WIDTH - 230, 12, 210, 56, "rgba(0,0,0,0.35)");
+    text("💰 " + money + " kr", WIDTH - 125, 40, 32);
+    box(WIDTH - 230, 74, 210, 46, "rgba(0,0,0,0.25)");
+    text("🦴 Dyremad: " + food, WIDTH - 125, 97, 22);
+    if (menu) drawMenu();
+    return;
+  }
   if (scene === "inside") {
+    var room = roomTransform();
+    clear("#8b5a2b");
+    ctx.save();
+    ctx.translate(room.x, room.y);
+    ctx.scale(room.scale, room.scale);
     drawInside();
     floaters.forEach(function (f) { text(f.words, f.x, f.y, 28, f.color); });
+    ctx.restore();
     box(WIDTH - 230, 12, 210, 56, "rgba(0,0,0,0.35)");
     text("💰 " + money + " kr", WIDTH - 125, 40, 32);
     box(WIDTH - 230, 74, 210, 46, "rgba(0,0,0,0.25)");
@@ -696,8 +836,8 @@ function draw() {
     circle(coin.x, coin.y, 12, "#ffd34e");
   });
   drawPets();
-  emoji("👧", player.x, player.y, 60);
-  drawSpeech(player.x, player.y);
+  emoji("👧", hero.x, hero.y, 60);
+  drawSpeech(hero.x, hero.y);
   shops.forEach(function (shop) { if (shop.customer) drawCustomer(shop); });
   floaters.forEach(function (f) { text(f.words, f.x, f.y, 28, f.color); });
   ctx.restore();
@@ -711,12 +851,14 @@ function draw() {
 }
 
 function buy(priceInKr) {
-  if (money < priceInKr) { sfx("bump"); townFloat("Du mangler " + (priceInKr - money) + " kr", WIDTH / 2, 610, "#fff"); return false; }
+  if (money < priceInKr) { sfx("bump"); townFloat("Du mangler " + (priceInKr - money) + " kr", null, 610, "#fff"); return false; }
   money -= priceInKr;
   return true;
 }
 
-function tapMenu(x, y) {
+function tapMenu(screenX, screenY) {
+  var offset = menuOffset();
+  var x = screenX - offset.x, y = screenY - offset.y;
   if (x > 770 && x < 870 && y > 120 && y < 220) { menu = null; return; }
   if (x < 162 || x > 862 || y < 134 || y > 654) { menu = null; return; }
   if (menu.kind !== "sell") {
@@ -726,7 +868,7 @@ function tapMenu(x, y) {
     });
     if (picked === -1) return;
     var choice = menuChoices()[picked];
-    if (menu.kind === "stable" && !firstHouse()) { sfx("bump"); townFloat("Byg et hus først 🏠", WIDTH / 2, 610, "#fff"); return; }
+    if (menu.kind === "stable" && !firstHouse()) { sfx("bump"); townFloat("Byg et hus først 🏠", ROOM_W / 2, 610, "#fff"); return; }
     if (!buy(choice.priceInKr)) return;
     if (menu.kind === "build") {
       var key = BUILD_ORDER[picked];
@@ -734,7 +876,7 @@ function tapMenu(x, y) {
       if (key === "hus") { built.furniture = []; built.pets = []; }
       shops.push(built);
       var plot = plots[menu.plot];
-      float(key === "hus" ? "Dit nye hus! 🎉" : "Nyt " + choice.name.toLowerCase() + "! 🎉", plot.x + PLOT_WIDTH / 2, plot.y, "#fff");
+      float(key === "hus" ? "Dit nye hus! 🎉" : "Nyt " + choice.name.toLowerCase() + "! 🎉", plot.x + PLOT_ROOM_W / 2, plot.y, "#fff");
       sfx("boing");
     } else if (menu.kind === "furniture") {
       var spot = freeSpot();
@@ -777,7 +919,7 @@ function tapMenu(x, y) {
       var plot = plots[shop.plot];
       if (item === shop.customer.item) {
         money += item.priceInKr;
-        float("Tak! +" + item.priceInKr + " kr", plot.x + PLOT_WIDTH / 2, plot.y + PLOT_HEIGHT, "#ffd34e");
+        float("Tak! +" + item.priceInKr + " kr", plot.x + PLOT_ROOM_W / 2, plot.y + PLOT_HEIGHT, "#ffd34e");
         shop.customer = null;
         shop.wait = random(4, 9);
         sfx("sejr");
@@ -785,7 +927,7 @@ function tapMenu(x, y) {
         menu = null;
       } else {
         sfx("bump");
-        townFloat("Nej, det var ikke det 😅", WIDTH / 2, 600, "#fff");
+        townFloat("Nej, det var ikke det 😅", ROOM_W / 2, 600, "#fff");
       }
     }
   });
@@ -828,9 +970,9 @@ function petAt(x, y) {
 function goInside(house) {
   home = house;
   roomIndex = 0;
-  townSpot = { x: player.x, y: player.y };
-  player.x = player.targetX = 512;
-  player.y = player.targetY = 600;
+  townSpot = { x: hero.x, y: hero.y };
+  hero.x = hero.targetX = 512;
+  hero.y = hero.targetY = 600;
   petFollowers.forEach(function (pet, i) { pet.x = 512 - 55 * (i + 1); pet.y = 620; });
   scene = "inside";
   sfx("klik");
@@ -838,9 +980,9 @@ function goInside(house) {
 
 function goOutside() {
   scene = "town";
-  player.x = player.targetX = townSpot.x;
-  player.y = player.targetY = townSpot.y;
-  petFollowers.forEach(function (pet, i) { pet.x = player.x - 55 * (i + 1); pet.y = player.y + 20; });
+  hero.x = hero.targetX = townSpot.x;
+  hero.y = hero.targetY = townSpot.y;
+  petFollowers.forEach(function (pet, i) { pet.x = hero.x - 55 * (i + 1); pet.y = hero.y + 20; });
   home = null;
   pendingAction = null;
   sfx("klik");
@@ -853,7 +995,7 @@ function tapInside(x, y) {
     if (x > 654 && x < 874) goOutside();
     return;
   }
-  if (y > 400 && y < 520 && (x < 102 || x > WIDTH - 102)) {
+  if (y > 400 && y < 520 && (x < 102 || x > ROOM_W - 102)) {
     roomIndex = (roomIndex + (x < 102 ? -1 : 1) + ROOMS.length) % ROOMS.length;
     pendingAction = null;
     sfx("klik");
@@ -865,15 +1007,24 @@ function tapInside(x, y) {
   if (tank && Math.abs(x - tank.x) < 90 && Math.abs(y - tank.y) < 60) { feed(tank.fish); return; }
   var item = furnitureAt(x, y);
   if (item) { dragging = { item: item, startX: x, startY: y, offsetX: item.x - x, offsetY: item.y - y, moved: false }; return; }
-  player.targetX = x;
-  player.targetY = Math.max(FLOOR_TOP + 30, Math.min(FLOOR_BOTTOM, y));
+  hero.targetX = x;
+  hero.targetY = Math.max(FLOOR_TOP + 30, Math.min(FLOOR_BOTTOM, y));
 }
 
-function onDrag(x, y) {
+function toRoom(x, y) {
+  var tall = tallHouse();
+  if (tall && scene === "inside") return screenToHouse(tall, x, y);
+  var room = roomTransform();
+  return { x: (x - room.x) / room.scale, y: (y - room.y) / room.scale };
+}
+
+function onDrag(screenX, screenY) {
   if (!dragging) return;
+  var p = toRoom(screenX, screenY);
+  var x = p.x, y = p.y;
   if (!dragging.moved && distance(x, y, dragging.startX, dragging.startY) < 15) return;
   dragging.moved = true;
-  dragging.item.x = Math.max(70, Math.min(WIDTH - 70, x + dragging.offsetX));
+  dragging.item.x = Math.max(70, Math.min(ROOM_W - 70, x + dragging.offsetX));
   dragging.item.y = Math.max(FLOOR_TOP - 20, Math.min(FLOOR_BOTTOM - 20, y + dragging.offsetY));
 }
 
@@ -884,18 +1035,24 @@ function onRelease() {
     remember();
   } else {
     pendingAction = item;
-    player.targetX = item.x;
-    player.targetY = Math.min(FLOOR_BOTTOM, item.y + 50);
+    hero.targetX = item.x;
+    hero.targetY = Math.min(FLOOR_BOTTOM, item.y + 50);
   }
   dragging = null;
 }
 
 function onTap(x, y) {
   if (menu) { tapMenu(x, y); return; }
-  if (scene === "inside") { tapInside(x, y); return; }
+  if (scene === "inside") {
+    var tall = tallHouse();
+    if (tall) { tapInsideTall(tall, x, y); return; }
+    var p = toRoom(x, y);
+    tapInside(p.x, p.y);
+    return;
+  }
   if (x > WIDTH - 262 && y > HEIGHT - 92) {
     if (money >= growPrice()) growCity();
-    else { sfx("bump"); townFloat("Du mangler " + (growPrice() - money) + " kr", WIDTH / 2, 600, "#fff"); }
+    else { sfx("bump"); townFloat("Du mangler " + (growPrice() - money) + " kr", null, 600, "#fff"); }
     return;
   }
   x += camera.x;
@@ -928,6 +1085,6 @@ function onTap(x, y) {
     if (onPlot.customer) { menu = { kind: "sell", shop: onPlot }; return; }
   }
 
-  player.targetX = Math.max(bounds.left + 30, Math.min(bounds.right - 30, x));
-  player.targetY = Math.max(cityLevel === 0 ? 90 : bounds.top + 30, Math.min(bounds.bottom - 30, y));
+  hero.targetX = Math.max(bounds.left + 30, Math.min(bounds.right - 30, x));
+  hero.targetY = Math.max(cityLevel === 0 ? 90 : bounds.top + 30, Math.min(bounds.bottom - 30, y));
 }
