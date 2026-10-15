@@ -267,7 +267,7 @@ function button(r, label, color) {
 
 function draw() {
   clear("#0f3d3e");
-  text("Pillås", ui.title.x, ui.title.y, 44, "#ffd43b");
+  text("Slange 🐍", ui.title.x, ui.title.y, 44, "#ffd43b");
   text(player().emoji + " " + difficulty.name + " · Bane " + level + "  ·  Slanger: " + arrowsLeft(), ui.info.x, ui.info.y, 24, "#c3fae8");
   var b = ui.board;
   var cell = cellSize();
