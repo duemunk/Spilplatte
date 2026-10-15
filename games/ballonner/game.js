@@ -101,6 +101,7 @@ function loseLife() {
 }
 
 function pop(balloon) {
+  sfx("ballon");
   for (var i = 0; i < 10; i++) {
     var angle = i / 10 * Math.PI * 2;
     var speed = random(150, 320);
@@ -311,7 +312,7 @@ function onTap(x, y) {
       } else if (hit.kind === "heart") { lives = Math.min(MAX_LIVES, lives + 1); points++; sfx("boing"); }
       else if (hit.kind === "clock") { slowTime = SLOW_SECONDS; sfx("boing"); points++; }
       else if (hit.kind === "gold") { points += GOLD_POINTS; sfx("mont"); }
-      else { points += hit.small ? 2 : 1; sfx("pop"); }
+      else { points += hit.small ? 2 : 1; }
       if (points > best) { best = points; playerSave("best", best); }
       return;
     }
