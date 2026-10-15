@@ -1,5 +1,7 @@
 useFont("racer");
 window.HI_RES = true;
+window.ADAPTIVE = true;
+window.USES_PLAYERS = true;
 
 var theme = { sky: "#5fb4f0", horizon: "#a9d8fb", grass: "#5f9e4a", concrete: "#a3a3a8", edge: "#5c5c62", text: "#fff" };
 
@@ -90,15 +92,18 @@ function setup() {
       style: j % 5 === 2 ? "jeep" : "sedan"
     });
   }
-  wallet = load("wallet", wallet);
+  var legacy = !load("legacyClaimed", false) && player().id !== "gaest";
+  if (legacy) save("legacyClaimed", true);
+  wallet = playerLoad("wallet", legacy ? load("wallet", wallet) : wallet);
   wallet.extraTurbos = wallet.extraTurbos || 0;
-  var saved = load("settings", {});
+  var saved = playerLoad("settings", legacy ? load("settings", {}) : {});
   settings = {};
   Object.keys(DEFAULT_SETTINGS).forEach(function (key) {
     settings[key] = saved[key] === undefined ? DEFAULT_SETTINGS[key] : saved[key];
   });
   if (wallet.owned.indexOf(settings.style) === -1) wallet.owned.push(settings.style);
-  record = load("record", 0);
+  record = playerLoad("record", legacy ? load("record", 0) : 0);
+  if (legacy) { playerSave("wallet", wallet); playerSave("settings", settings); playerSave("record", record); }
 }
 
 function startRun() {
@@ -137,6 +142,25 @@ function drawChute(x, y, angle, color, scale) {
   ctx.restore();
 }
 
+// The garage and result screens are laid out on a fixed 1024 × 768 panel that is scaled
+// and centred on any screen; the flight itself uses the whole adaptive world.
+var PANEL_W = 1024;
+var PANEL_H = 768;
+var panel = { scale: 1, x: 0, y: 0 };
+
+function onLayout() {
+  panel.scale = Math.min(WIDTH / PANEL_W, HEIGHT / PANEL_H);
+  panel.x = (WIDTH - PANEL_W * panel.scale) / 2;
+  panel.y = (HEIGHT - PANEL_H * panel.scale) / 2;
+}
+
+function toPanel(x, y) {
+  return { x: (x - panel.x) / panel.scale, y: (y - panel.y) / panel.scale };
+}
+
+function gasButton() { return { x: WIDTH - 124, y: HEIGHT - 128 }; }
+function leftButton() { return { x: 124, y: HEIGHT - 128 }; }
+
 function finish(goodLanding) {
   var flips = Math.floor(Math.abs(car.spin) / (Math.PI * 2) + 0.15);
   var meters = Math.round((car.x - lip.x) / UNITS_PER_METER);
@@ -145,9 +169,9 @@ function finish(goodLanding) {
   parkedCars.forEach(function (parked) { if (parked.x < car.x) passed++; });
   var earned = Math.max(1, Math.round(meters / METERS_PER_KR));
   wallet.money += earned;
-  save("wallet", wallet);
+  playerSave("wallet", wallet);
   var isRecord = meters > record;
-  if (isRecord) { record = meters; save("record", record); }
+  if (isRecord) { record = meters; playerSave("record", record); }
   result = { meters: meters, flips: flips, good: goodLanding, passed: passed, isRecord: isRecord, earned: earned };
   sfx(goodLanding ? "bump" : "tab");
   if (isRecord) setTimeout(function () { sfx("sejr"); }, 400);
@@ -196,8 +220,8 @@ function update(dt) {
 
   if (car) {
     car.flame = Math.max(0, car.flame - dt);
-    camera.x = car.x - 300;
-    camera.y = Math.min(car.y - 420, GROUND_Y - 700);
+    camera.x = car.x - WIDTH * 0.3;
+    camera.y = Math.min(car.y - HEIGHT * 0.55, GROUND_Y - HEIGHT + 68);
   }
 }
 
@@ -297,7 +321,7 @@ function drawCloud(x, y, size) {
 function drawSky() {
   clear(theme.sky);
   box(0, HEIGHT * 0.55, WIDTH, HEIGHT * 0.45, theme.horizon);
-  circle(880, 110, 60, "#fff6c2");
+  circle(WIDTH - 144, 110, 60, "#fff6c2");
   clouds.forEach(function (cloud) {
     var x = ((cloud.x - camera.x * 0.3) % 5000 + 5000) % 5000 - 300;
     var y = cloud.y - camera.y * 0.3;
@@ -393,19 +417,20 @@ function roundButton(x, y, radius, label, sub, color, pressed) {
 
 function drawHud() {
   if (phase === "ramp") {
-    roundButton(900, 640, 90, "⛽️", "Gas", "#2f9e44", buttons.gas);
-    roundButton(124, 640, 90, "🔥", "Turbo " + car.turbos, car.turbos > 0 ? RAINBOW : "#999", false);
+    roundButton(gasButton().x, gasButton().y, 90, "⛽️", "Gas", "#2f9e44", buttons.gas);
+    roundButton(leftButton().x, leftButton().y, 90, "🔥", "Turbo " + car.turbos, car.turbos > 0 ? RAINBOW : "#999", false);
   }
   if (phase === "air") {
-    roundButton(900, 640, 90, "🤸", "Salto", car.chute ? "#999" : "#1f6feb", buttons.flip);
-    if (wallet.parachute) roundButton(124, 640, 90, "☂️", car.chute ? "Åben!" : "Faldskærm", car.chute ? "#999" : "#e03131", false);
+    roundButton(gasButton().x, gasButton().y, 90, "🤸", "Salto", car.chute ? "#999" : "#1f6feb", buttons.flip);
+    if (wallet.parachute) roundButton(leftButton().x, leftButton().y, 90, "☂️", car.chute ? "Åben!" : "Faldskærm", car.chute ? "#999" : "#e03131", false);
     var flown = Math.max(0, Math.round((car.x - lip.x) / UNITS_PER_METER));
-    box(WIDTH / 2 - 110, 16, 220, 60, "rgba(0,0,0,0.35)");
-    text(flown + " m", WIDTH / 2, 46, 36);
+    var hudY = WIDTH / 2 - 110 < RESERVED.w ? RESERVED.h + 10 : 16;
+    box(WIDTH / 2 - 110, hudY, 220, 60, "rgba(0,0,0,0.35)");
+    text(flown + " m", WIDTH / 2, hudY + 30, 36);
   }
   if (phase === "ramp" || phase === "air") {
     box(WIDTH - 240, 16, 220, 50, "rgba(0,0,0,0.35)");
-    text("🏆 Rekord: " + record + " m", WIDTH - 130, 41, 22);
+    text(player().emoji + " 🏆 " + record + " m", WIDTH - 130, 41, 22);
   }
   if (phase === "landed" && resultTimer <= 0) drawResult();
 }
@@ -418,15 +443,19 @@ function bigButton(x, y, width, height, label, color) {
 
 function drawResult() {
   box(0, 0, WIDTH, HEIGHT, "rgba(0,0,0,0.45)");
+  ctx.save();
+  ctx.translate(panel.x, panel.y);
+  ctx.scale(panel.scale, panel.scale);
   box(212, 110, 600, 540, "#fff8e7");
-  text(result.isRecord ? "🏆 NY REKORD! 🏆" : "🏁 Du fløj", WIDTH / 2, 170, 40, "#222");
-  text(result.meters + " m", WIDTH / 2, 250, 80, "#d7262e");
-  text(result.good ? "Flot landing! 👍" : "Av! Bilen landede skævt 🙃", WIDTH / 2, 330, 28, "#444");
-  if (result.flips > 0) text("🤸 " + result.flips + " salto" + (result.flips > 1 ? "er" : "") + (result.good ? " (+" + result.flips * METERS_PER_FLIP + " m)" : ""), WIDTH / 2, 375, 26, "#444");
-  text("Du fløj over " + result.passed + " biler 🚗", WIDTH / 2, 420, 26, "#444");
-  text("💰 +" + result.earned + " kr  ·  Rekord: " + record + " m", WIDTH / 2, 462, 24, "#2f9e44");
+  text(result.isRecord ? "🏆 NY REKORD! 🏆" : "🏁 Du fløj", PANEL_W / 2, 170, 40, "#222");
+  text(result.meters + " m", PANEL_W / 2, 250, 80, "#d7262e");
+  text(result.good ? "Flot landing! 👍" : "Av! Bilen landede skævt 🙃", PANEL_W / 2, 330, 28, "#444");
+  if (result.flips > 0) text("🤸 " + result.flips + " salto" + (result.flips > 1 ? "er" : "") + (result.good ? " (+" + result.flips * METERS_PER_FLIP + " m)" : ""), PANEL_W / 2, 375, 26, "#444");
+  text("Du fløj over " + result.passed + " biler 🚗", PANEL_W / 2, 420, 26, "#444");
+  text("💰 +" + result.earned + " kr  ·  Rekord: " + record + " m", PANEL_W / 2, 462, 24, "#2f9e44");
   bigButton(262, 520, 230, 90, "🔁 Igen", "#2f9e44");
   bigButton(532, 520, 230, 90, "🎨 Garage", "#1f6feb");
+  ctx.restore();
 }
 
 function garageOptions() {
@@ -435,8 +464,39 @@ function garageOptions() {
   return COLORS.concat([RAINBOW]);
 }
 
+// The garage has two layouts: the original landscape one (on the scaled 1024 × 768 panel) and
+// a tall one for portrait screens that have room for it. Both use the same drawing code.
+function garageLayout() {
+  var top = RESERVED.h + 20;
+  if (HEIGHT > WIDTH && HEIGHT - top >= 960) {
+    top = Math.max(top, (HEIGHT - 980) / 2);
+    var W = WIDTH;
+    return {
+      transform: { x: 0, y: 0, scale: 1 }, width: W, floorY: top + 510,
+      title: { x: W / 2, y: top + 30 }, record: { x: W / 2 - 170, y: top + 84 }, money: { x: W / 2 + 170, y: top + 84 },
+      car: { x: W / 2, y: top + 330, scale: 2.4 }, chutePreview: { x: W / 2, y: top + 340, scale: 1.1 },
+      chute: { x: 24, y: top + 420, w: 350, h: 70 }, turbo: { x: W - 374, y: top + 420, w: 350, h: 70 },
+      tab: function (i) { return { x: (W - (GARAGE_TABS.length * 146 - 6)) / 2 + i * 146, y: top + 530, w: 140, h: 64 }; },
+      optionY: top + 655, optionStep: 80,
+      style: function (i) { return { x: W / 2 + (i - (STYLES.length - 1) / 2) * 182, y: top + 735 }; },
+      go: { x: W / 2 - 200, y: top + 860, w: 400, h: 96 }
+    };
+  }
+  return {
+    transform: panel, width: PANEL_W, floorY: 410,
+    title: { x: PANEL_W / 2, y: 50 }, record: { x: PANEL_W - 130, y: 50 }, money: { x: PANEL_W - 137, y: 88 },
+    car: { x: PANEL_W / 2, y: 370, scale: 2.6 }, chutePreview: { x: PANEL_W / 2, y: 380, scale: 1.25 },
+    chute: { x: PANEL_W - 262, y: 116, w: 250, h: 66 }, turbo: { x: PANEL_W - 262, y: 194, w: 250, h: 66 },
+    tab: function (i) { return { x: 52 + i * 186, y: 425, w: 176, h: 64 }; },
+    optionY: 555, optionStep: 100,
+    style: function (i) { return { x: 100 + i * 172, y: 622 }; },
+    go: { x: 800, y: 620, w: 190, h: 90 }
+  };
+}
+
 function optionX(i) {
-  return WIDTH / 2 + (i - (garageOptions().length - 1) / 2) * 100;
+  var g = garageLayout();
+  return g.width / 2 + (i - (garageOptions().length - 1) / 2) * g.optionStep;
 }
 
 function drawSwatch(x, y, color) {
@@ -449,65 +509,70 @@ function drawSwatch(x, y, color) {
   ctx.restore();
 }
 
-function styleX(i) { return 100 + i * 172; }
-
 function drawGarage() {
+  var g = garageLayout();
+  var t = g.transform;
   clear("#3b3f4a");
-  box(0, 410, WIDTH, 358, "#2a2d35");
-  text("🎨 Garage", WIDTH / 2, 50, 44);
-  text("🏆 Rekord: " + record + " m", WIDTH - 130, 50, 22);
-  if (garageTab === "chuteColor") drawChute(WIDTH / 2, 380, 0, settings.chuteColor, 1.25);
-  drawCar(WIDTH / 2, 370, 0, settings.style, settings.color, 2.6, settings);
+  box(0, t.y + g.floorY * t.scale, WIDTH, HEIGHT, "#2a2d35");
+  ctx.save();
+  ctx.translate(t.x, t.y);
+  ctx.scale(t.scale, t.scale);
+  text("🎨 Garage", g.title.x, g.title.y, 44);
+  text(player().emoji + " 🏆 Rekord: " + record + " m", g.record.x, g.record.y, 22);
+  text("💰 " + wallet.money + " kr", g.money.x, g.money.y, 28, "#ffd34e");
+  if (garageTab === "chuteColor") drawChute(g.chutePreview.x, g.chutePreview.y, 0, settings.chuteColor, g.chutePreview.scale);
+  drawCar(g.car.x, g.car.y, 0, settings.style, settings.color, g.car.scale, settings);
 
   GARAGE_TABS.forEach(function (tab, i) {
-    var x = 52 + i * 186;
+    var r = g.tab(i);
     var active = tab.key === garageTab;
-    box(x, 425, 176, 64, active ? "#ffd34e" : "#555a66");
-    text(tab.name, x + 88, 457, 20, active ? "#222" : "#fff");
+    box(r.x, r.y, r.w, r.h, active ? "#ffd34e" : "#555a66");
+    text(tab.name, r.x + r.w / 2, r.y + r.h / 2, 20, active ? "#222" : "#fff");
   });
 
   garageOptions().forEach(function (option, i) {
     var x = optionX(i);
-    if (option === settings[garageTab]) circle(x, 555, 44, "#ffd34e");
+    var y = g.optionY;
+    if (option === settings[garageTab]) circle(x, y, 44, "#ffd34e");
     if (garageTab === "badge") {
-      circle(x, 555, 36, "#fff");
+      circle(x, y, 36, "#fff");
       ctx.fillStyle = settings.badgeColor === RAINBOW ? "#e03131" : settings.badgeColor === "#f5f5f5" ? "#222" : settings.badgeColor;
       ctx.font = "bold 40px -apple-system, Helvetica, sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       if (settings.badgeColor === RAINBOW) {
-        ctx.save(); ctx.translate(x, 556); ctx.scale(3, 3); ctx.translate(0, 9);
+        ctx.save(); ctx.translate(x, y + 1); ctx.scale(3, 3); ctx.translate(0, 9);
         ctx.fillStyle = rainbowGradient();
         ctx.font = "bold 13px -apple-system, Helvetica, sans-serif";
         ctx.fillText(option, 0, -9);
         ctx.restore();
       } else {
-        ctx.fillText(option, x, 556);
+        ctx.fillText(option, x, y + 1);
       }
     } else {
-      drawSwatch(x, 555, option);
+      drawSwatch(x, y, option);
     }
   });
 
   STYLES.forEach(function (style, i) {
-    var x = styleX(i);
+    var p = g.style(i);
     var owned = wallet.owned.indexOf(style.key) !== -1;
     var selected = style.key === settings.style;
-    box(x - 82, 622, 164, 92, selected ? "#ffd34e" : owned ? "#555a66" : "#3a3d48");
-    text(style.name, x, 646, 22, selected ? "#222" : "#fff");
-    text("⚡ Fart " + style.speed, x, 674, 17, selected ? "#444" : "#cfd3dc");
-    text(owned ? (selected ? "✔ Valgt" : "Din") : style.priceInKr + " kr", x, 700, 18, selected ? "#222" : owned ? "#9ae6b4" : wallet.money >= style.priceInKr ? "#ffd34e" : "#999");
+    box(p.x - 82, p.y, 164, 92, selected ? "#ffd34e" : owned ? "#555a66" : "#3a3d48");
+    text(style.name, p.x, p.y + 24, 22, selected ? "#222" : "#fff");
+    text("⚡ Fart " + style.speed, p.x, p.y + 52, 17, selected ? "#444" : "#cfd3dc");
+    text(owned ? (selected ? "✔ Valgt" : "Din") : style.priceInKr + " kr", p.x, p.y + 78, 18, selected ? "#222" : owned ? "#9ae6b4" : wallet.money >= style.priceInKr ? "#ffd34e" : "#999");
   });
-  text("💰 " + wallet.money + " kr", WIDTH - 137, 88, 28, "#ffd34e");
   var chuteColor = wallet.parachute ? "#2f9e44" : wallet.money >= PARACHUTE_PRICE_IN_KR ? "#e03131" : "#555a66";
-  box(WIDTH - 262, 116, 250, 66, chuteColor);
-  text(wallet.parachute ? "☂️ Faldskærm ✔" : "☂️ Faldskærm · " + PARACHUTE_PRICE_IN_KR + " kr", WIDTH - 137, 149, 20);
+  box(g.chute.x, g.chute.y, g.chute.w, g.chute.h, chuteColor);
+  text(wallet.parachute ? "☂️ Faldskærm ✔" : "☂️ Faldskærm · " + PARACHUTE_PRICE_IN_KR + " kr", g.chute.x + g.chute.w / 2, g.chute.y + g.chute.h / 2, 20);
   var maxed = wallet.extraTurbos >= MAX_EXTRA_TURBOS;
   var turboColor = maxed ? "#2f9e44" : wallet.money >= TURBO_PRICE_IN_KR ? "#f76707" : "#555a66";
-  box(WIDTH - 262, 194, 250, 66, turboColor);
-  text(maxed ? "🔥 Turbo x" + (TURBOS_PER_RUN + wallet.extraTurbos) + " ✔" : "🔥 +1 turbo · " + TURBO_PRICE_IN_KR + " kr", WIDTH - 137, 218, 20);
-  text("Du har " + (TURBOS_PER_RUN + wallet.extraTurbos) + " pr. tur", WIDTH - 137, 244, 16, "#fff");
-  bigButton(800, 620, 190, 90, "Kør! 🏁", "#2f9e44");
+  box(g.turbo.x, g.turbo.y, g.turbo.w, g.turbo.h, turboColor);
+  text(maxed ? "🔥 Turbo x" + (TURBOS_PER_RUN + wallet.extraTurbos) + " ✔" : "🔥 +1 turbo · " + TURBO_PRICE_IN_KR + " kr", g.turbo.x + g.turbo.w / 2, g.turbo.y + 24, 20);
+  text("Du har " + (TURBOS_PER_RUN + wallet.extraTurbos) + " pr. tur", g.turbo.x + g.turbo.w / 2, g.turbo.y + 50, 16, "#fff");
+  bigButton(g.go.x, g.go.y, g.go.w, g.go.h, "Kør! 🏁", "#2f9e44");
+  ctx.restore();
 }
 
 function draw() {
@@ -523,48 +588,59 @@ function inside(x, y, left, top, width, height) {
   return x > left && x < left + width && y > top && y < top + height;
 }
 
-function onTap(x, y) {
+function onTap(screenX, screenY) {
+  var x = screenX, y = screenY;
+  if (phase === "garage" || phase === "landed") {
+    var local = toPanel(screenX, screenY);
+    x = local.x;
+    y = local.y;
+  }
   if (phase === "garage") {
+    var g = garageLayout();
+    x = (screenX - g.transform.x) / g.transform.scale;
+    y = (screenY - g.transform.y) / g.transform.scale;
+    function hit(r) { return inside(x, y, r.x, r.y, r.w, r.h); }
     GARAGE_TABS.forEach(function (tab, i) {
-      if (inside(x, y, 52 + i * 186, 425, 176, 64)) { garageTab = tab.key; sfx("klik"); }
+      if (hit(g.tab(i))) { garageTab = tab.key; sfx("klik"); }
     });
     garageOptions().forEach(function (option, i) {
-      if (distance(x, y, optionX(i), 555) < 46) { settings[garageTab] = option; sfx("klik"); save("settings", settings); }
+      if (distance(x, y, optionX(i), g.optionY) < 46) { settings[garageTab] = option; sfx("klik"); playerSave("settings", settings); }
     });
     STYLES.forEach(function (style, i) {
-      if (!inside(x, y, styleX(i) - 82, 622, 164, 92)) return;
+      var p = g.style(i);
+      if (!inside(x, y, p.x - 82, p.y, 164, 92)) return;
       if (wallet.owned.indexOf(style.key) === -1) {
         if (wallet.money < style.priceInKr) { sfx("bump"); return; }
         wallet.money -= style.priceInKr;
         wallet.owned.push(style.key);
-        save("wallet", wallet);
+        playerSave("wallet", wallet);
         sfx("sejr");
       } else {
         sfx("klik");
       }
       settings.style = style.key;
-      save("settings", settings);
+      playerSave("settings", settings);
     });
-    if (inside(x, y, WIDTH - 262, 194, 250, 66) && wallet.extraTurbos < MAX_EXTRA_TURBOS) {
+    if (hit(g.turbo) && wallet.extraTurbos < MAX_EXTRA_TURBOS) {
       if (wallet.money < TURBO_PRICE_IN_KR) { sfx("bump"); return; }
       wallet.money -= TURBO_PRICE_IN_KR;
       wallet.extraTurbos++;
-      save("wallet", wallet);
+      playerSave("wallet", wallet);
       sfx("eksplosion");
     }
-    if (inside(x, y, WIDTH - 262, 116, 250, 66) && !wallet.parachute) {
+    if (hit(g.chute) && !wallet.parachute) {
       if (wallet.money < PARACHUTE_PRICE_IN_KR) { sfx("bump"); return; }
       wallet.money -= PARACHUTE_PRICE_IN_KR;
       wallet.parachute = true;
-      save("wallet", wallet);
+      playerSave("wallet", wallet);
       sfx("sejr");
     }
-    if (inside(x, y, 800, 620, 190, 90)) { sfx("hop"); startRun(); }
+    if (hit(g.go)) { sfx("hop"); startRun(); }
     return;
   }
   if (phase === "ramp") {
-    if (distance(x, y, 900, 640) < 100) buttons.gas = true;
-    if (distance(x, y, 124, 640) < 100 && car.turbos > 0) {
+    if (distance(x, y, gasButton().x, gasButton().y) < 100) buttons.gas = true;
+    if (distance(x, y, leftButton().x, leftButton().y) < 100 && car.turbos > 0) {
       car.turbos--;
       car.speed += TURBO_BOOST;
       car.flame = 0.8;
@@ -573,8 +649,8 @@ function onTap(x, y) {
     return;
   }
   if (phase === "air") {
-    if (distance(x, y, 900, 640) < 100) buttons.flip = true;
-    if (wallet.parachute && !car.chute && distance(x, y, 124, 640) < 100) { car.chute = true; buttons.flip = false; sfx("pop"); }
+    if (distance(x, y, gasButton().x, gasButton().y) < 100) buttons.flip = true;
+    if (wallet.parachute && !car.chute && distance(x, y, leftButton().x, leftButton().y) < 100) { car.chute = true; buttons.flip = false; sfx("pop"); }
     return;
   }
   if (phase === "landed" && resultTimer <= 0) {
@@ -584,5 +660,5 @@ function onTap(x, y) {
 }
 
 function onRelease(x, y) {
-  if (distance(x, y, 900, 640) < 140) { buttons.gas = false; buttons.flip = false; }
+  if (distance(x, y, gasButton().x, gasButton().y) < 140) { buttons.gas = false; buttons.flip = false; }
 }
