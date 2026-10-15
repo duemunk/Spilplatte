@@ -37,14 +37,57 @@ function restart() {
   newRecord = false;
   slowTime = 0;
   level = 1;
+  stars = [];
 }
+
+// Every level brings something new; after the last unlock the game just keeps speeding up.
+var UNLOCKS = {
+  2: "Små hurtige balloner giver 2 point",
+  3: "Guld-balloner ⭐ giver 5 point",
+  4: "Pas på bomberne 💣",
+  5: "Ur-balloner ⏰ gør alt langsomt",
+  6: "Balloner der svæver i zigzag 🌬️",
+  7: "Hjerte-balloner ❤️ giver et ekstra liv",
+  8: "Regnbue-balloner 🌈 popper alle på én gang",
+  9: "Ballon-klaser — tre på én snor 🎈🎈🎈"
+};
+var MAX_LIVES = 5;
+var PATTERNS = ["plain", "plain", "stripes", "dots", "shine"];
+var SKIES = [
+  { sky: "#87ceeb", low: "#a5d8ff", sun: "#fff3bf" },
+  { sky: "#ffd8a8", low: "#ffe8cc", sun: "#fff3bf" },
+  { sky: "#ff8787", low: "#ffa94d", sun: "#ffec99" },
+  { sky: "#5f3dc4", low: "#9775fa", sun: "#ffe066" },
+  { sky: "#1c2a5c", low: "#364fc7", sun: "#f1f3f5", night: true },
+  { sky: "#0b0b2a", low: "#1c1c4a", sun: "#f1f3f5", night: true }
+];
+var stars = [];
 
 function balloonKind() {
   var roll = Math.random();
-  if (points > 5 && roll < 0.1) return "bomb";
-  if (roll < 0.18) return "gold";
-  if (roll < 0.23) return "clock";
+  if (level >= 8 && roll < 0.03) return "rainbow";
+  if (level >= 7 && roll < 0.07) return "heart";
+  if (level >= 4 && roll < 0.17) return "bomb";
+  if (level >= 3 && roll < 0.25) return "gold";
+  if (level >= 5 && roll < 0.3) return "clock";
   return "normal";
+}
+
+function shade(hex, factor) {
+  var value = parseInt(hex.slice(1), 16);
+  function part(shift) { return Math.max(0, Math.min(255, Math.round(((value >> shift) & 255) * factor))); }
+  return "rgb(" + part(16) + "," + part(8) + "," + part(0) + ")";
+}
+
+function spawnBalloon(x, y, kind) {
+  var small = level >= 2 && kind === "normal" && Math.random() < 0.3;
+  var color = kind === "gold" ? "#fcc419" : kind === "clock" ? "#9775fa" : kind === "heart" ? "#ff4d6d" : BALLOON_COLORS[Math.floor(Math.random() * BALLOON_COLORS.length)];
+  balloons.push({
+    x: x, y: y, kind: kind, small: small, color: color, dark: shade(color, 0.72), light: shade(color, 1.25),
+    pattern: kind === "normal" ? PATTERNS[Math.floor(Math.random() * PATTERNS.length)] : "plain",
+    zigzag: level >= 6 && Math.random() < 0.35, phase: random(0, 6.28), baseX: x,
+    speed: (random(70, 160) + Math.min(level, 12) * 25) * (small ? 1.5 : 1)
+  });
 }
 
 function loseLife() {
@@ -66,7 +109,7 @@ function pop(balloon) {
       life: 0.5, color: PIECE_COLORS[i % PIECE_COLORS.length]
     });
   }
-  var words = { normal: balloon.small ? "+2" : "+1", gold: "+" + GOLD_POINTS + " ⭐", clock: "Langsomt! ⏰", bomb: "Bum! 💥" }[balloon.kind || "normal"];
+  var words = { rainbow: "Regnbue! 🌈", heart: "+1 ❤️", normal: balloon.small ? "+2" : "+1", gold: "+" + GOLD_POINTS + " ⭐", clock: "Langsomt! ⏰", bomb: "Bum! 💥" }[balloon.kind || "normal"];
   floaters.push({ words: words, x: balloon.x, y: balloon.y - 40, life: 0.8 });
 }
 
@@ -92,19 +135,24 @@ function update(dt) {
   var nowLevel = 1 + Math.floor(points / POINTS_PER_LEVEL);
   if (nowLevel > level) {
     level = nowLevel;
-    floaters.push({ words: "Niveau " + level + "! 🚀", x: WIDTH / 2, y: HEIGHT / 2, life: 1.6, big: true });
+    floaters.push({ words: "Niveau " + level + "! 🚀", x: WIDTH / 2, y: HEIGHT / 2 - 30, life: 2.2, big: true });
+    floaters.push({ words: UNLOCKS[level] || "Endnu hurtigere! 💨", x: WIDTH / 2, y: HEIGHT / 2 + 40, life: 2.2 });
     sfx("sejr");
   }
-  if (Math.random() < dt * (1 + level * 0.35) * pace) {
-    var small = Math.random() < 0.3;
-    balloons.push({
-      x: random(80, WIDTH - 80), y: HEIGHT + 80, kind: balloonKind(), small: small,
-      speed: (random(70, 160) + level * 25) * (small ? 1.5 : 1),
-      color: BALLOON_COLORS[Math.floor(Math.random() * BALLOON_COLORS.length)]
-    });
+  if (Math.random() < dt * (1 + Math.min(level, 12) * 0.3) * pace) {
+    var x = random(100, WIDTH - 100);
+    if (level >= 9 && Math.random() < 0.12) {
+      spawnBalloon(x - 45, HEIGHT + 90, "normal");
+      spawnBalloon(x + 45, HEIGHT + 90, "normal");
+      spawnBalloon(x, HEIGHT + 40, "normal");
+    } else {
+      spawnBalloon(x, HEIGHT + 80, balloonKind());
+    }
   }
   for (var i = balloons.length - 1; i >= 0; i--) {
     balloons[i].y -= balloons[i].speed * pace * dt;
+    balloons[i].phase += dt * 2.5;
+    if (balloons[i].zigzag) balloons[i].x = balloons[i].baseX + Math.sin(balloons[i].phase) * 90;
     if (balloons[i].y < -60) {
       var missed = balloons[i];
       balloons.splice(i, 1);
@@ -114,15 +162,24 @@ function update(dt) {
 }
 
 function draw() {
-  clear("#87ceeb");
-  box(0, HEIGHT * 0.6, WIDTH, HEIGHT * 0.4, "#a5d8ff");
-  circle(WIDTH - 140, 260, 60, "#fff3bf");
+  var sky = SKIES[Math.min(level, SKIES.length) - 1];
+  clear(sky.sky);
+  box(0, HEIGHT * 0.6, WIDTH, HEIGHT * 0.4, sky.low);
+  if (sky.night) {
+    if (stars.length === 0) for (var st = 0; st < 40; st++) stars.push({ x: random(0, 1800), y: random(0, 1200) });
+    stars.forEach(function (star) { if (star.x < WIDTH && star.y < HEIGHT) box(star.x, star.y, 3, 3, "#fff"); });
+    circle(WIDTH - 140, 260, 56, sky.sun);
+    circle(WIDTH - 118, 248, 50, sky.sky);
+  } else {
+    circle(WIDTH - 140, 260, 60, sky.sun);
+  }
+  var cloudColor = sky.night ? "#3b4a8a" : "#fff";
   clouds.forEach(function (cloud) {
     var k = cloud.size;
-    circle(cloud.x, cloud.y, 40 * k, "#fff");
-    circle(cloud.x + 40 * k, cloud.y - 18 * k, 50 * k, "#fff");
-    circle(cloud.x + 85 * k, cloud.y, 38 * k, "#fff");
-    box(cloud.x, cloud.y, 85 * k, 38 * k, "#fff");
+    circle(cloud.x, cloud.y, 40 * k, cloudColor);
+    circle(cloud.x + 40 * k, cloud.y - 18 * k, 50 * k, cloudColor);
+    circle(cloud.x + 85 * k, cloud.y, 38 * k, cloudColor);
+    box(cloud.x, cloud.y, 85 * k, 38 * k, cloudColor);
   });
   if (slowTime > 0) box(0, 0, WIDTH, HEIGHT, "rgba(120,80,200,0.18)");
   balloons.forEach(drawBalloon);
@@ -133,7 +190,7 @@ function draw() {
   box(WIDTH / 2 - 250, top - 30, 500, 108, "rgba(0,60,120,0.3)");
   text("Point: " + points + "  ·  Niveau " + level, WIDTH / 2, top, 40);
   var hearts = "";
-  for (var h = 0; h < LIVES; h++) hearts += h < lives ? "❤️" : "🖤";
+  for (var h = 0; h < Math.max(LIVES, lives); h++) hearts += h < lives ? "❤️" : "🖤";
   text(hearts, WIDTH / 2, top + 48, 32);
   text(player().emoji + " 🏆 " + best, WIDTH - 120, 36, 26);
   box(WIDTH - 220, 62, 200, 64, "rgba(0,60,120,0.45)");
@@ -151,26 +208,76 @@ function draw() {
   }
 }
 
+function balloonBody(b, radius, color) {
+  if (b.kind === "heart") {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(0, radius * 0.9);
+    ctx.bezierCurveTo(-radius * 1.5, -radius * 0.2, -radius * 0.6, -radius * 1.3, 0, -radius * 0.45);
+    ctx.bezierCurveTo(radius * 0.6, -radius * 1.3, radius * 1.5, -radius * 0.2, 0, radius * 0.9);
+    ctx.fill();
+    return;
+  }
+  ctx.save();
+  ctx.scale(1, 1.2);
+  circle(0, 0, radius, color);
+  ctx.restore();
+}
+
 function drawBalloon(b) {
   if (b.kind === "bomb") { emoji("💣", b.x, b.y, 96); return; }
   var radius = b.small ? 30 : 44;
-  var color = b.kind === "gold" ? "#fcc419" : b.kind === "clock" ? "#9775fa" : b.color;
-  ctx.strokeStyle = "rgba(0,0,0,0.35)";
+  var sway = Math.sin(b.phase) * 8;
+  ctx.strokeStyle = "rgba(60,60,60,0.5)";
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(b.x, b.y + radius * 1.2);
-  ctx.quadraticCurveTo(b.x - 10, b.y + radius * 1.9, b.x + 4, b.y + radius * 2.6);
+  ctx.moveTo(b.x, b.y + radius * 1.25);
+  ctx.quadraticCurveTo(b.x - 12 + sway, b.y + radius * 1.8, b.x + sway * 0.5, b.y + radius * 2.3);
+  ctx.quadraticCurveTo(b.x + 12 + sway, b.y + radius * 2.8, b.x + sway, b.y + radius * 3.2);
   ctx.stroke();
+
   ctx.save();
   ctx.translate(b.x, b.y);
-  ctx.scale(1, 1.2);
-  circle(0, 0, radius, color);
-  circle(-radius * 0.35, -radius * 0.4, radius * 0.22, "rgba(255,255,255,0.45)");
+  if (b.kind === "rainbow") {
+    ctx.save();
+    ctx.scale(1, 1.2);
+    ctx.beginPath();
+    ctx.arc(0, 0, radius, 0, Math.PI * 2);
+    ctx.clip();
+    var colors = ["#ff6b6b", "#ffa94d", "#ffd43b", "#51cf66", "#4dabf7", "#845ef7"];
+    colors.forEach(function (c, i) { box(-radius, -radius + i * radius / 3, radius * 2, radius / 3 + 1, c); });
+    ctx.restore();
+  } else {
+    balloonBody(b, radius, b.dark);
+    ctx.translate(-radius * 0.08, -radius * 0.1);
+    balloonBody(b, radius * 0.9, b.color);
+    if (b.pattern === "stripes") {
+      ctx.save();
+      ctx.scale(1, 1.2);
+      ctx.beginPath();
+      ctx.arc(0, 0, radius * 0.9, 0, Math.PI * 2);
+      ctx.clip();
+      for (var sx = -radius; sx < radius; sx += radius * 0.5) box(sx, -radius, radius * 0.16, radius * 2, b.light);
+      ctx.restore();
+    } else if (b.pattern === "dots") {
+      circle(-radius * 0.3, radius * 0.2, radius * 0.12, b.light);
+      circle(radius * 0.3, -radius * 0.1, radius * 0.12, b.light);
+      circle(0, radius * 0.55, radius * 0.1, b.light);
+      circle(radius * 0.15, -radius * 0.6, radius * 0.1, b.light);
+    }
+    ctx.save();
+    ctx.rotate(-0.5);
+    ctx.scale(0.55, 1);
+    circle(-radius * 0.55, -radius * 0.45, radius * 0.32, "rgba(255,255,255,0.55)");
+    ctx.restore();
+    if (b.pattern === "shine") circle(radius * 0.35, radius * 0.45, radius * 0.08, "rgba(255,255,255,0.6)");
+  }
   ctx.restore();
-  ctx.fillStyle = color;
+
+  ctx.fillStyle = b.dark;
   ctx.beginPath();
-  ctx.moveTo(b.x - 6, b.y + radius * 1.25);
-  ctx.lineTo(b.x + 6, b.y + radius * 1.25);
+  ctx.moveTo(b.x - 7, b.y + radius * 1.3);
+  ctx.lineTo(b.x + 7, b.y + radius * 1.3);
   ctx.lineTo(b.x, b.y + radius * 1.12);
   ctx.closePath();
   ctx.fill();
@@ -191,7 +298,18 @@ function onTap(x, y) {
       pop(hit);
       balloons.splice(i, 1);
       if (hit.kind === "bomb") { sfx("eksplosion"); loseLife(); return; }
-      if (hit.kind === "clock") { slowTime = SLOW_SECONDS; sfx("boing"); points++; }
+      if (hit.kind === "rainbow") {
+        var count = 0;
+        for (var j = balloons.length - 1; j >= 0; j--) {
+          if (balloons[j].kind === "bomb") continue;
+          pop(balloons[j]);
+          count += balloons[j].kind === "gold" ? GOLD_POINTS : 1;
+          balloons.splice(j, 1);
+        }
+        points += count + 1;
+        sfx("sejr");
+      } else if (hit.kind === "heart") { lives = Math.min(MAX_LIVES, lives + 1); points++; sfx("boing"); }
+      else if (hit.kind === "clock") { slowTime = SLOW_SECONDS; sfx("boing"); points++; }
       else if (hit.kind === "gold") { points += GOLD_POINTS; sfx("mont"); }
       else { points += hit.small ? 2 : 1; sfx("pop"); }
       if (points > best) { best = points; playerSave("best", best); }
