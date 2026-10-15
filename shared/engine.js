@@ -430,6 +430,14 @@
     onPress(add, newPlayerForm);
     grid.appendChild(add);
     panel.appendChild(grid);
+    // Closing keeps the current player (the last one chosen, or Gæst).
+    var close = el("button", "people-close", "✖️");
+    close.setAttribute("aria-label", "Luk");
+    function keepCurrent() { closeOverlay(); if (!started) start(); }
+    onPress(close, keepCurrent);
+    panel.appendChild(close);
+    overlay.addEventListener("click", function (event) { if (event.target === overlay) keepCurrent(); });
+    overlay.addEventListener("touchend", function (event) { if (event.target === overlay) keepCurrent(); });
   };
 
   function escapeHtml(text) {
