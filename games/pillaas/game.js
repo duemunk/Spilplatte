@@ -14,12 +14,16 @@ var SLIDE_SECONDS = 0.28;
 var SHAKE_SECONDS = 0.3;
 
 var DIFFICULTIES = [
+  { key: "baby", name: "Baby 🍼", base: 3, max: 4, fill: 0.4, tricky: 0, tail: [1, 1], color: "#ffc9c9" },
   { key: "let", name: "Let 🙂", base: 3, max: 5, fill: 0.55, tricky: 0.1, tail: [1, 2], color: "#51cf66" },
   { key: "mellem", name: "Mellem 😎", base: 4, max: 7, fill: 0.7, tricky: 0.4, tail: [1, 3], color: "#4dabf7" },
   { key: "svaer", name: "Svær 🔥", base: 5, max: 8, fill: 0.8, tricky: 0.7, tail: [2, 3], color: "#ff922b" },
   { key: "ekspert", name: "Ekspert 🤯", base: 6, max: 9, fill: 0.9, tricky: 0.95, tail: [2, 4], color: "#e64980" },
   { key: "mester", name: "Mester 👑", base: 7, max: 10, fill: 0.95, tricky: 1, tail: [2, 5], color: "#845ef7" },
-  { key: "umulig", name: "Umulig 💀", base: 8, max: 12, fill: 1, tricky: 1, tail: [3, 6], color: "#343a40" }
+  { key: "umulig", name: "Umulig 💀", base: 8, max: 12, fill: 1, tricky: 1, tail: [3, 6], color: "#343a40" },
+  { key: "vulkan", name: "Vulkan 🌋", base: 9, max: 13, fill: 1, tricky: 1, tail: [3, 7], color: "#c92a2a" },
+  { key: "galakse", name: "Galakse 🌌", base: 10, max: 14, fill: 1, tricky: 1, tail: [4, 8], color: "#3b5bdb" },
+  { key: "gud", name: "Gud 😇", base: 12, max: 15, fill: 1, tricky: 1, tail: [4, 10], color: "#f59f00" }
 ];
 var difficulty = DIFFICULTIES[1];
 var choosing = false;
@@ -225,12 +229,12 @@ function draw() {
   if (choosing) {
     var mx = WIDTH / 2, my = HEIGHT / 2;
     box(0, 0, WIDTH, HEIGHT, "rgba(0,0,0,0.55)");
-    box(mx - 260, my - 320, 520, 640, "#fff8e7");
+    box(mx - 330, my - 320, 660, 620, "#fff8e7");
     text("Hvor svært skal det være?", mx, my - 275, 30, "#222");
     DIFFICULTIES.forEach(function (d, i) {
       var r = difficultyRect(i);
       box(r.x, r.y, r.w, r.h, d === difficulty ? d.color : "#adb5bd");
-      text(d.name + "  ·  bane " + playerLoad("level-" + d.key, 1), mx, r.y + 40, 28);
+      text(d.name + " · " + playerLoad("level-" + d.key, 1), r.x + r.w / 2, r.y + 42, 26);
     });
   }
   if (won) {
@@ -243,7 +247,7 @@ function draw() {
   }
 }
 
-function difficultyRect(i) { return { x: WIDTH / 2 - 200, y: HEIGHT / 2 - 230 + i * 90, w: 400, h: 78 }; }
+function difficultyRect(i) { return { x: WIDTH / 2 - 305 + (i % 2) * 310, y: HEIGHT / 2 - 230 + Math.floor(i / 2) * 100, w: 300, h: 84 }; }
 
 function inRect(x, y, r) { return x > r.x && x < r.x + r.w && y > r.y && y < r.y + r.h; }
 
