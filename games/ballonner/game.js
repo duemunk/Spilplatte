@@ -151,7 +151,7 @@ function update(dt) {
     }
   }
   for (var i = balloons.length - 1; i >= 0; i--) {
-    balloons[i].y -= balloons[i].speed * pace * dt;
+    balloons[i].y -= balloons[i].speed * pace * (HEIGHT / 768) * dt;
     balloons[i].phase += dt * 2.5;
     if (balloons[i].zigzag) balloons[i].x = balloons[i].baseX + Math.sin(balloons[i].phase) * 90;
     if (balloons[i].y < -60) {
@@ -169,10 +169,10 @@ function draw() {
   if (sky.night) {
     if (stars.length === 0) for (var st = 0; st < 40; st++) stars.push({ x: random(0, 1800), y: random(0, 1200) });
     stars.forEach(function (star) { if (star.x < WIDTH && star.y < HEIGHT) box(star.x, star.y, 3, 3, "#fff"); });
-    circle(WIDTH - 140, 260, 56, sky.sun);
-    circle(WIDTH - 118, 248, 50, sky.sky);
+    circle(WIDTH - 140, hudTop() + 210, 56, sky.sun);
+    circle(WIDTH - 118, hudTop() + 198, 50, sky.sky);
   } else {
-    circle(WIDTH - 140, 260, 60, sky.sun);
+    circle(WIDTH - 140, hudTop() + 210, 60, sky.sun);
   }
   var cloudColor = sky.night ? "#3b4a8a" : "#fff";
   clouds.forEach(function (cloud) {
@@ -187,8 +187,9 @@ function draw() {
   pieces.forEach(function (piece) { box(piece.x - 5, piece.y - 5, 10, 10, piece.color); });
   floaters.forEach(function (f) { text(f.words, f.x, f.y, f.big ? 64 : 36, "#fff"); });
 
-  var top = Math.max(50, RESERVED.h + 20);
-  box(WIDTH / 2 - 250, top - 30, 500, 108, "rgba(0,60,120,0.3)");
+  var top = hudTop();
+  var hudWidth = Math.min(500, WIDTH - 40);
+  box(WIDTH / 2 - hudWidth / 2, top - 30, hudWidth, 108, "rgba(0,60,120,0.3)");
   text("Point: " + points + "  ·  Niveau " + level, WIDTH / 2, top, 40);
   var hearts = "";
   for (var h = 0; h < Math.max(LIVES, lives); h++) hearts += h < lives ? "❤️" : "🖤";
@@ -223,6 +224,12 @@ function balloonBody(b, radius, color) {
   ctx.scale(1, 1.2);
   circle(0, 0, radius, color);
   ctx.restore();
+}
+
+// The score sits below the 🏠 ↺ 👤 buttons and the Rekorder button when they would overlap.
+function hudTop() {
+  var crowded = WIDTH / 2 + 250 > WIDTH - 220 || WIDTH / 2 - 250 < RESERVED.w;
+  return crowded ? Math.max(RESERVED.h, 126) + 50 : 50;
 }
 
 function drawBalloon(b) {
