@@ -82,13 +82,20 @@
       });
     }
 
+    // Tiles are darker than the game's own colour so an icon in that colour still stands out.
+    function darker(hex) {
+      var value = parseInt(hex.replace("#", ""), 16);
+      function channel(shift) { return Math.round(((value >> shift) & 255) * 0.8); }
+      return "rgb(" + channel(16) + "," + channel(8) + "," + channel(0) + ")";
+    }
+
     function render() {
       var tiles = document.getElementById("tiles");
       games.forEach(function (game) {
         var a = document.createElement("a");
         a.className = "tile";
         a.href = "games/" + game.folder + "/?v=" + Date.now();
-        a.style.background = game.color || "#4a90e2";
+        a.style.background = darker(game.color || "#4a90e2");
         var art = game.icon
           ? '<img class="icon" src="games/' + game.folder + "/" + game.icon + '" alt="">'
           : '<span class="emoji">' + game.emoji + "</span>";
