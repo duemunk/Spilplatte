@@ -420,9 +420,13 @@
 
   window.choosePlayer = function () {
     var panel = openOverlay("Hvem spiller? 🎮");
+    var main = el("button", "person person-main", '<span class="person-emoji">' + current.emoji + "</span>" + escapeHtml(current.name) + '<span class="person-hint">Tryk for at spille ▶︎</span>');
+    onPress(main, function () { pick(current); });
+    panel.appendChild(main);
     var grid = el("div", "people-grid");
     readPlayers().concat([GUEST]).forEach(function (player) {
-      var button = el("button", "person" + (player.id === current.id ? " person-current" : ""), '<span class="person-emoji">' + player.emoji + "</span>" + escapeHtml(player.name));
+      if (player.id === current.id) return;
+      var button = el("button", "person", '<span class="person-emoji">' + player.emoji + "</span>" + escapeHtml(player.name));
       onPress(button, function () { pick(player); });
       grid.appendChild(button);
     });

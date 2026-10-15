@@ -130,3 +130,8 @@ html, body {
   padding: 0; border: 0; border-radius: 16px; background: #e2d6bd; color: #222; font-size: 30px;
   -webkit-appearance: none;
 }
+.confirm-box .person-main {
+  display: block; width: calc(100% - 16px); min-height: 150px; margin: 8px; background: #2f9e44; font-size: 32px;
+}
+.confirm-box .person-main .person-emoji { font-size: 64px; }
+.person-hint { display: block; font-size: 18px; font-weight: normal; opacity: .9; margin-top: 4px; }
