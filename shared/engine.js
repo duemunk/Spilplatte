@@ -155,7 +155,7 @@
   var FONTS = {
     standard: { weight: "bold", family: "-apple-system, Helvetica, sans-serif" },
     arcade: { weight: "normal", family: "\"Press Start 2P\", monospace" },
-    kridt: { weight: "bold", family: "\"Chalkboard SE\", \"Comic Sans MS\", sans-serif" },
+    kridt: { weight: "bold", family: "\"Chalkboard SE\", sans-serif" },
     tusch: { weight: "normal", family: "\"MarkerFelt-Wide\", \"Marker Felt\", sans-serif" },
     racer: { weight: "normal", family: "\"Futura-CondensedExtraBold\", Futura, Impact, sans-serif" },
     rund: { weight: "normal", family: "\"Arial Rounded MT Bold\", \"Helvetica Rounded\", sans-serif" }
