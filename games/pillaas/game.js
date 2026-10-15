@@ -10,7 +10,8 @@ var DIRECTIONS = {
   up: { dr: -1, dc: 0, angle: -Math.PI / 2, color: "#51cf66" }
 };
 var DIRECTION_NAMES = ["right", "down", "left", "up"];
-var SLIDE_SECONDS = 0.28;
+var SNAKE_COLORS = ["#ff6b6b", "#fcc419", "#4dabf7", "#51cf66", "#cc5de8", "#ff922b", "#20c997", "#f06595"];
+var SLIDE_SECONDS = 0.6;
 var SHAKE_SECONDS = 0.3;
 
 var DIFFICULTIES = [
@@ -47,10 +48,36 @@ function pathLength(r, c, name) {
 // An arrow is a head cell plus a tail of cells behind it. Arrows are placed one by one, each
 // only where its tail fits and its way out is free at that moment. Taking them out in the
 // reverse order always works, so every level can be solved.
-function cellsOf(r, c, name, length) {
+// A snake is a winding path of cells, head first. Its body may bend and curl around other
+// snakes, but never onto its own way out.
+function exitCells(r, c, name) {
   var d = DIRECTIONS[name];
-  var cells = [];
-  for (var i = 0; i < length; i++) cells.push([r - d.dr * i, c - d.dc * i]);
+  var cells = {};
+  for (var rr = r + d.dr, cc = c + d.dc; inside(rr, cc); rr += d.dr, cc += d.dc) cells[rr + "," + cc] = true;
+  return cells;
+}
+
+function growSnake(r, c, name, length) {
+  var d = DIRECTIONS[name];
+  var blocked = exitCells(r, c, name);
+  var cells = [[r, c]];
+  var used = {};
+  used[r + "," + c] = true;
+  var next = [r - d.dr, c - d.dc];
+  while (cells.length < length) {
+    if (!inside(next[0], next[1]) || grid[next[0]][next[1]] !== null || used[next[0] + "," + next[1]] || blocked[next[0] + "," + next[1]]) break;
+    cells.push(next);
+    used[next[0] + "," + next[1]] = true;
+    var last = next;
+    var steps = [[0, 1], [1, 0], [0, -1], [-1, 0]].sort(function () { return Math.random() - 0.5; });
+    next = null;
+    for (var i = 0; i < steps.length; i++) {
+      var candidate = [last[0] + steps[i][0], last[1] + steps[i][1]];
+      var key = candidate[0] + "," + candidate[1];
+      if (inside(candidate[0], candidate[1]) && grid[candidate[0]][candidate[1]] === null && !used[key] && !blocked[key]) { next = candidate; break; }
+    }
+    if (!next) break;
+  }
   return cells;
 }
 
@@ -75,16 +102,13 @@ function buildLevel() {
     var rr = Math.floor(Math.random() * size);
     var cc = Math.floor(Math.random() * size);
     if (grid[rr][cc] !== null) continue;
-    var length = difficulty.tail[0] + Math.floor(Math.random() * (difficulty.tail[1] - difficulty.tail[0] + 1));
-    var options = DIRECTION_NAMES.filter(function (name) {
-      var cells = cellsOf(rr, cc, name, length);
-      return cells.every(function (cell) { return inside(cell[0], cell[1]) && grid[cell[0]][cell[1]] === null; }) && pathFree(rr, cc, name);
-    });
+    var length = 1 + difficulty.tail[0] + Math.floor(Math.random() * (difficulty.tail[1] - difficulty.tail[0] + 1));
+    var options = DIRECTION_NAMES.filter(function (name) { return pathFree(rr, cc, name); });
     if (options.length === 0) continue;
     // Harder levels point arrows across the board, so they block more of the others.
     if (Math.random() < difficulty.tricky) options.sort(function (a, b) { return pathLength(rr, cc, b) - pathLength(rr, cc, a); });
     else options.sort(function () { return Math.random() - 0.5; });
-    var arrow = { id: arrows.length, dir: options[0], cells: cellsOf(rr, cc, options[0], length) };
+    var arrow = { id: arrows.length, dir: options[0], cells: growSnake(rr, cc, options[0], length), color: SNAKE_COLORS[arrows.length % SNAKE_COLORS.length] };
     arrows.push(arrow);
     arrow.cells.forEach(function (cell) { grid[cell[0]][cell[1]] = arrow.id; });
     filled += length;
@@ -139,57 +163,75 @@ function update(dt) {
   if (shake) { shake.t += dt; if (shake.t > SHAKE_SECONDS) shake = null; }
 }
 
-function drawArrow(arrow, offsetX, offsetY, alpha) {
-  var b = ui.board;
+function cellCenter(cellPos) {
+  var cell = cellSize();
+  return { x: ui.board.x + cellPos[1] * cell + cell / 2, y: ui.board.y + cellPos[0] * cell + cell / 2 };
+}
+
+// Points of the snake from tail to head; `moved` cells along its own track (then straight out).
+function snakePoints(arrow, moved) {
   var cell = cellSize();
   var d = DIRECTIONS[arrow.dir];
-  var head = arrow.cells[0];
-  var tail = arrow.cells[arrow.cells.length - 1];
-  var hx = b.x + head[1] * cell + cell / 2 + offsetX, hy = b.y + head[0] * cell + cell / 2 + offsetY;
-  var tx = b.x + tail[1] * cell + cell / 2 + offsetX, ty = b.y + tail[0] * cell + cell / 2 + offsetY;
-  if (arrow.cells.length === 1) {
-    tx -= d.dc * cell * 0.3; ty -= d.dr * cell * 0.3;
-    hx += d.dc * cell * 0.05; hy += d.dr * cell * 0.05;
+  var track = arrow.cells.slice().reverse().map(cellCenter);
+  var headIndex = track.length - 1;
+  function at(f) {
+    if (f >= headIndex) {
+      var head = track[headIndex];
+      return { x: head.x + d.dc * cell * (f - headIndex), y: head.y + d.dr * cell * (f - headIndex) };
+    }
+    var i = Math.floor(f), t = f - i;
+    return { x: track[i].x + (track[i + 1].x - track[i].x) * t, y: track[i].y + (track[i + 1].y - track[i].y) * t };
   }
+  var points = [];
+  for (var j = 0; j < track.length; j++) points.push(at(j + moved));
+  return points;
+}
+
+function drawArrow(arrow, offsetX, offsetY, alpha, moved) {
+  var cell = cellSize();
+  var d = DIRECTIONS[arrow.dir];
+  var points = snakePoints(arrow, moved || 0);
   ctx.globalAlpha = alpha;
-  ctx.strokeStyle = d.color;
+  ctx.save();
+  ctx.translate(offsetX, offsetY);
+  ctx.strokeStyle = arrow.color;
   ctx.lineCap = "round";
-  ctx.lineWidth = cell * 0.26;
+  ctx.lineJoin = "round";
+  ctx.lineWidth = cell * 0.4;
   ctx.beginPath();
-  ctx.moveTo(tx, ty);
-  ctx.lineTo(hx, hy);
+  ctx.moveTo(points[0].x, points[0].y);
+  for (var i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+  if (points.length === 1) ctx.lineTo(points[0].x - d.dc * cell * 0.35, points[0].y - d.dr * cell * 0.35);
   ctx.stroke();
-  ctx.save();
-  ctx.translate(tx, ty);
+  ctx.strokeStyle = "rgba(255,255,255,0.3)";
+  ctx.lineWidth = cell * 0.08;
+  ctx.setLineDash([cell * 0.12, cell * 0.18]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  var head = points[points.length - 1];
+  ctx.translate(head.x, head.y);
   ctx.rotate(d.angle);
-  ctx.fillStyle = d.color;
-  [-1, 1].forEach(function (side) {
-    ctx.beginPath();
-    ctx.moveTo(cell * 0.1, 0);
-    ctx.lineTo(-cell * 0.2, side * cell * 0.3);
-    ctx.lineTo(-cell * 0.32, side * cell * 0.3);
-    ctx.lineTo(-cell * 0.08, 0);
-    ctx.closePath();
-    ctx.fill();
-  });
-  ctx.restore();
-  ctx.save();
-  ctx.translate(hx, hy);
-  ctx.rotate(d.angle);
-  ctx.fillStyle = d.color;
+  circle(cell * 0.08, 0, cell * 0.3, arrow.color);
+  ctx.fillStyle = arrow.color;
   ctx.beginPath();
-  ctx.moveTo(cell * 0.42, 0);
-  ctx.lineTo(-cell * 0.05, cell * 0.36);
-  ctx.lineTo(-cell * 0.05, -cell * 0.36);
+  ctx.moveTo(cell * 0.46, 0);
+  ctx.lineTo(cell * 0.18, cell * 0.24);
+  ctx.lineTo(cell * 0.18, -cell * 0.24);
   ctx.closePath();
   ctx.fill();
-  ctx.fillStyle = "rgba(255,255,255,0.35)";
+  circle(cell * 0.14, -cell * 0.13, cell * 0.08, "#fff");
+  circle(cell * 0.14, cell * 0.13, cell * 0.08, "#fff");
+  circle(cell * 0.17, -cell * 0.13, cell * 0.04, "#111");
+  circle(cell * 0.17, cell * 0.13, cell * 0.04, "#111");
+  ctx.strokeStyle = "#e03131";
+  ctx.lineWidth = cell * 0.04;
   ctx.beginPath();
-  ctx.moveTo(cell * 0.3, 0);
-  ctx.lineTo(0, cell * 0.22);
-  ctx.lineTo(0, 0);
-  ctx.closePath();
-  ctx.fill();
+  ctx.moveTo(cell * 0.46, 0);
+  ctx.lineTo(cell * 0.6, 0);
+  ctx.lineTo(cell * 0.66, -cell * 0.05);
+  ctx.moveTo(cell * 0.6, 0);
+  ctx.lineTo(cell * 0.66, cell * 0.05);
+  ctx.stroke();
   ctx.restore();
   ctx.globalAlpha = 1;
 }
@@ -203,7 +245,7 @@ function button(r, label, color) {
 function draw() {
   clear("#0f3d3e");
   text("Pillås", ui.title.x, ui.title.y, 44, "#ffd43b");
-  text(player().emoji + " " + difficulty.name + " · Bane " + level + "  ·  Pile: " + arrowsLeft(), ui.info.x, ui.info.y, 24, "#c3fae8");
+  text(player().emoji + " " + difficulty.name + " · Bane " + level + "  ·  Slanger: " + arrowsLeft(), ui.info.x, ui.info.y, 24, "#c3fae8");
   var b = ui.board;
   var cell = cellSize();
   box(b.x - 8, b.y - 8, b.size + 16, b.size + 16, "#0a2a2b");
@@ -217,14 +259,13 @@ function draw() {
     }
   });
   leaving.forEach(function (item) {
-    var d = DIRECTIONS[item.arrow.dir];
-    var travel = (item.t / SLIDE_SECONDS) * b.size;
-    drawArrow(item.arrow, d.dc * travel, d.dr * travel, 1 - item.t / SLIDE_SECONDS);
+    var moved = (item.t / SLIDE_SECONDS) * (item.arrow.cells.length + size);
+    drawArrow(item.arrow, 0, 0, Math.max(0, 1 - item.t / SLIDE_SECONDS * 0.8), moved);
   });
     button(ui.restart, "🔁 Forfra", "#868e96");
   button(ui.records, "🏆 Rekorder", "#5c7cfa");
   button(ui.difficulty, difficulty.name, difficulty.color);
-  if (level === 1 && arrowsLeft() > 0 && !won) text("👆 Tryk på en pil, der kan flyve ud", WIDTH / 2, ui.board.y + ui.board.size + (HEIGHT > WIDTH ? 230 : 40), 22, "#c3fae8");
+  if (level === 1 && arrowsLeft() > 0 && !won) text("👆 Tryk på en slange, der kan komme ud", WIDTH / 2, ui.board.y + ui.board.size + (HEIGHT > WIDTH ? 230 : 40), 22, "#c3fae8");
 
   if (choosing) {
     var mx = WIDTH / 2, my = HEIGHT / 2;
