@@ -17,7 +17,9 @@ var DIFFICULTIES = [
   { key: "let", name: "Let 🙂", base: 3, max: 5, fill: 0.55, tricky: 0.1, tail: [1, 2], color: "#51cf66" },
   { key: "mellem", name: "Mellem 😎", base: 4, max: 7, fill: 0.7, tricky: 0.4, tail: [1, 3], color: "#4dabf7" },
   { key: "svaer", name: "Svær 🔥", base: 5, max: 8, fill: 0.8, tricky: 0.7, tail: [2, 3], color: "#ff922b" },
-  { key: "ekspert", name: "Ekspert 🤯", base: 6, max: 9, fill: 0.9, tricky: 0.95, tail: [2, 4], color: "#e64980" }
+  { key: "ekspert", name: "Ekspert 🤯", base: 6, max: 9, fill: 0.9, tricky: 0.95, tail: [2, 4], color: "#e64980" },
+  { key: "mester", name: "Mester 👑", base: 7, max: 10, fill: 0.95, tricky: 1, tail: [2, 5], color: "#845ef7" },
+  { key: "umulig", name: "Umulig 💀", base: 8, max: 12, fill: 1, tricky: 1, tail: [3, 6], color: "#343a40" }
 ];
 var difficulty = DIFFICULTIES[1];
 var choosing = false;
@@ -65,7 +67,7 @@ function buildLevel() {
   for (var r = 0; r < size; r++) { var row = []; for (var c = 0; c < size; c++) row.push(null); grid.push(row); }
   var target = Math.round(size * size * Math.min(0.95, difficulty.fill + level * 0.01));
   var filled = 0;
-  for (var tries = 0; tries < 4000 && filled < target; tries++) {
+  for (var tries = 0; tries < 9000 && filled < target; tries++) {
     var rr = Math.floor(Math.random() * size);
     var cc = Math.floor(Math.random() * size);
     if (grid[rr][cc] !== null) continue;
@@ -141,6 +143,10 @@ function drawArrow(arrow, offsetX, offsetY, alpha) {
   var tail = arrow.cells[arrow.cells.length - 1];
   var hx = b.x + head[1] * cell + cell / 2 + offsetX, hy = b.y + head[0] * cell + cell / 2 + offsetY;
   var tx = b.x + tail[1] * cell + cell / 2 + offsetX, ty = b.y + tail[0] * cell + cell / 2 + offsetY;
+  if (arrow.cells.length === 1) {
+    tx -= d.dc * cell * 0.3; ty -= d.dr * cell * 0.3;
+    hx += d.dc * cell * 0.05; hy += d.dr * cell * 0.05;
+  }
   ctx.globalAlpha = alpha;
   ctx.strokeStyle = d.color;
   ctx.lineCap = "round";
@@ -219,10 +225,10 @@ function draw() {
   if (choosing) {
     var mx = WIDTH / 2, my = HEIGHT / 2;
     box(0, 0, WIDTH, HEIGHT, "rgba(0,0,0,0.55)");
-    box(mx - 260, my - 250, 520, 500, "#fff8e7");
-    text("Hvor svært skal det være?", mx, my - 200, 30, "#222");
+    box(mx - 260, my - 320, 520, 640, "#fff8e7");
+    text("Hvor svært skal det være?", mx, my - 275, 30, "#222");
     DIFFICULTIES.forEach(function (d, i) {
-      var r = { x: mx - 200, y: my - 150 + i * 95, w: 400, h: 80 };
+      var r = difficultyRect(i);
       box(r.x, r.y, r.w, r.h, d === difficulty ? d.color : "#adb5bd");
       text(d.name + "  ·  bane " + playerLoad("level-" + d.key, 1), mx, r.y + 40, 28);
     });
@@ -237,6 +243,8 @@ function draw() {
   }
 }
 
+function difficultyRect(i) { return { x: WIDTH / 2 - 200, y: HEIGHT / 2 - 230 + i * 90, w: 400, h: 78 }; }
+
 function inRect(x, y, r) { return x > r.x && x < r.x + r.w && y > r.y && y < r.y + r.h; }
 
 function onTap(x, y) {
@@ -250,7 +258,7 @@ function onTap(x, y) {
   }
   if (choosing) {
     DIFFICULTIES.forEach(function (d, i) {
-      if (inRect(x, y, { x: WIDTH / 2 - 200, y: HEIGHT / 2 - 150 + i * 95, w: 400, h: 80 })) { chooseDifficulty(d.key); sfx("hop"); }
+      if (inRect(x, y, difficultyRect(i))) { chooseDifficulty(d.key); sfx("hop"); }
     });
     choosing = false;
     return;
