@@ -13,6 +13,14 @@ var DIRECTION_NAMES = ["right", "down", "left", "up"];
 var SLIDE_SECONDS = 0.28;
 var SHAKE_SECONDS = 0.3;
 
+var DIFFICULTIES = [
+  { key: "let", name: "Let 🙂", base: 3, max: 5, fill: 0.55, tricky: 0.1, color: "#51cf66" },
+  { key: "mellem", name: "Mellem 😎", base: 4, max: 7, fill: 0.7, tricky: 0.4, color: "#4dabf7" },
+  { key: "svaer", name: "Svær 🔥", base: 5, max: 8, fill: 0.8, tricky: 0.7, color: "#ff922b" },
+  { key: "ekspert", name: "Ekspert 🤯", base: 6, max: 9, fill: 0.9, tricky: 0.95, color: "#e64980" }
+];
+var difficulty = DIFFICULTIES[1];
+var choosing = false;
 var level = 1;
 var size = 4;
 var grid = [];
@@ -21,7 +29,13 @@ var shake = null;
 var won = false;
 var ui = {};
 
-function levelSize(n) { return Math.min(8, 3 + Math.ceil(n / 2)); }
+function levelSize(n) { return Math.min(difficulty.max, difficulty.base + Math.floor((n - 1) / 2)); }
+
+function pathLength(r, c, name) {
+  var d = DIRECTIONS[name];
+  if (d.dr) return d.dr > 0 ? size - 1 - r : r;
+  return d.dc > 0 ? size - 1 - c : c;
+}
 
 // Arrows are placed one by one, each only where its way out is free at that moment. Taking
 // them out in the reverse order always works, so every level can be solved.
@@ -29,7 +43,7 @@ function buildLevel() {
   size = levelSize(level);
   grid = [];
   for (var r = 0; r < size; r++) { var row = []; for (var c = 0; c < size; c++) row.push(null); grid.push(row); }
-  var target = Math.round(size * size * Math.min(0.85, 0.55 + level * 0.03));
+  var target = Math.round(size * size * Math.min(0.95, difficulty.fill + level * 0.01));
   var placed = 0;
   for (var tries = 0; tries < 2000 && placed < target; tries++) {
     var rr = Math.floor(Math.random() * size);
@@ -37,7 +51,10 @@ function buildLevel() {
     if (grid[rr][cc]) continue;
     var options = DIRECTION_NAMES.filter(function (name) { return pathFree(rr, cc, name); });
     if (options.length === 0) continue;
-    grid[rr][cc] = options[Math.floor(Math.random() * options.length)];
+    // Harder levels point arrows across the board, so they block more of the others.
+    if (Math.random() < difficulty.tricky) options.sort(function (a, b) { return pathLength(rr, cc, b) - pathLength(rr, cc, a); });
+    else options.sort(function () { return Math.random() - 0.5; });
+    grid[rr][cc] = options[0];
     placed++;
   }
   leaving = [];
@@ -58,9 +75,15 @@ function arrowsLeft() {
   return count;
 }
 
-function setup() {
-  level = playerLoad("level", 1);
+function chooseDifficulty(key) {
+  DIFFICULTIES.forEach(function (d) { if (d.key === key) difficulty = d; });
+  playerSave("difficulty", difficulty.key);
+  level = playerLoad("level-" + difficulty.key, 1);
   buildLevel();
+}
+
+function setup() {
+  chooseDifficulty(playerLoad("difficulty", "mellem"));
 }
 
 function onLayout() {
@@ -76,6 +99,9 @@ function onLayout() {
   ui.restart = portrait
     ? { x: WIDTH / 2 - 230, y: below, w: 220, h: 80 }
     : { x: ui.board.x + boardSize + 40, y: ui.board.y + boardSize - 180, w: 220, h: 80 };
+  ui.difficulty = portrait
+    ? { x: WIDTH / 2 - 110, y: below + 100, w: 220, h: 80 }
+    : { x: ui.board.x + boardSize + 40, y: ui.board.y + boardSize - 280, w: 220, h: 80 };
   ui.records = portrait
     ? { x: WIDTH / 2 + 10, y: below, w: 220, h: 80 }
     : { x: ui.board.x + boardSize + 40, y: ui.board.y + boardSize - 80, w: 220, h: 80 };
@@ -125,7 +151,7 @@ function button(r, label, color) {
 function draw() {
   clear("#0f3d3e");
   text("Pillås", ui.title.x, ui.title.y, 44, "#ffd43b");
-  text(player().emoji + " Bane " + level + "  ·  Pile tilbage: " + arrowsLeft(), ui.info.x, ui.info.y, 24, "#c3fae8");
+  text(player().emoji + " " + difficulty.name + " · Bane " + level + "  ·  Pile: " + arrowsLeft(), ui.info.x, ui.info.y, 24, "#c3fae8");
   var b = ui.board;
   var cell = cellSize();
   box(b.x - 8, b.y - 8, b.size + 16, b.size + 16, "#0a2a2b");
@@ -146,10 +172,22 @@ function draw() {
     var travel = (arrow.t / SLIDE_SECONDS) * b.size;
     drawArrow(b.x + arrow.c * cell + d.dc * travel, b.y + arrow.r * cell + d.dr * travel, cell, arrow.name, 1 - arrow.t / SLIDE_SECONDS);
   });
-  button(ui.restart, "🔁 Forfra", "#e64980");
+  button(ui.restart, "🔁 Forfra", "#868e96");
   button(ui.records, "🏆 Rekorder", "#5c7cfa");
-  if (level === 1 && arrowsLeft() > 0 && !won) text("👆 Tryk på en pil, der kan flyve ud", WIDTH / 2, ui.board.y + ui.board.size + (HEIGHT > WIDTH ? 140 : 40), 22, "#c3fae8");
+  button(ui.difficulty, difficulty.name, difficulty.color);
+  if (level === 1 && arrowsLeft() > 0 && !won) text("👆 Tryk på en pil, der kan flyve ud", WIDTH / 2, ui.board.y + ui.board.size + (HEIGHT > WIDTH ? 230 : 40), 22, "#c3fae8");
 
+  if (choosing) {
+    var mx = WIDTH / 2, my = HEIGHT / 2;
+    box(0, 0, WIDTH, HEIGHT, "rgba(0,0,0,0.55)");
+    box(mx - 260, my - 250, 520, 500, "#fff8e7");
+    text("Hvor svært skal det være?", mx, my - 200, 30, "#222");
+    DIFFICULTIES.forEach(function (d, i) {
+      var r = { x: mx - 200, y: my - 150 + i * 95, w: 400, h: 80 };
+      box(r.x, r.y, r.w, r.h, d === difficulty ? d.color : "#adb5bd");
+      text(d.name + "  ·  bane " + playerLoad("level-" + d.key, 1), mx, r.y + 40, 28);
+    });
+  }
   if (won) {
     var cx = WIDTH / 2, cy = HEIGHT / 2;
     box(0, 0, WIDTH, HEIGHT, "rgba(0,0,0,0.5)");
@@ -171,8 +209,16 @@ function onTap(x, y) {
     }
     return;
   }
+  if (choosing) {
+    DIFFICULTIES.forEach(function (d, i) {
+      if (inRect(x, y, { x: WIDTH / 2 - 200, y: HEIGHT / 2 - 150 + i * 95, w: 400, h: 80 })) { chooseDifficulty(d.key); sfx("hop"); }
+    });
+    choosing = false;
+    return;
+  }
   if (inRect(x, y, ui.restart)) { buildLevel(); sfx("klik"); return; }
-  if (inRect(x, y, ui.records)) { showRecords("level", ". bane"); sfx("klik"); return; }
+  if (inRect(x, y, ui.difficulty)) { choosing = true; sfx("klik"); return; }
+  if (inRect(x, y, ui.records)) { showRecords("level-" + difficulty.key, ". bane"); sfx("klik"); return; }
   var b = ui.board;
   var cell = cellSize();
   var c = Math.floor((x - b.x) / cell);
@@ -185,7 +231,7 @@ function onTap(x, y) {
   sfx("laser");
   if (arrowsLeft() === 0) {
     won = true;
-    playerSave("level", level + 1);
+    playerSave("level-" + difficulty.key, level + 1);
     setTimeout(function () { sfx("sejr"); }, 250);
   }
 }
