@@ -14,16 +14,17 @@ var SLIDE_SECONDS = 0.28;
 var SHAKE_SECONDS = 0.3;
 
 var DIFFICULTIES = [
-  { key: "let", name: "Let 🙂", base: 3, max: 5, fill: 0.55, tricky: 0.1, color: "#51cf66" },
-  { key: "mellem", name: "Mellem 😎", base: 4, max: 7, fill: 0.7, tricky: 0.4, color: "#4dabf7" },
-  { key: "svaer", name: "Svær 🔥", base: 5, max: 8, fill: 0.8, tricky: 0.7, color: "#ff922b" },
-  { key: "ekspert", name: "Ekspert 🤯", base: 6, max: 9, fill: 0.9, tricky: 0.95, color: "#e64980" }
+  { key: "let", name: "Let 🙂", base: 3, max: 5, fill: 0.55, tricky: 0.1, tail: [1, 2], color: "#51cf66" },
+  { key: "mellem", name: "Mellem 😎", base: 4, max: 7, fill: 0.7, tricky: 0.4, tail: [1, 3], color: "#4dabf7" },
+  { key: "svaer", name: "Svær 🔥", base: 5, max: 8, fill: 0.8, tricky: 0.7, tail: [2, 3], color: "#ff922b" },
+  { key: "ekspert", name: "Ekspert 🤯", base: 6, max: 9, fill: 0.9, tricky: 0.95, tail: [2, 4], color: "#e64980" }
 ];
 var difficulty = DIFFICULTIES[1];
 var choosing = false;
 var level = 1;
 var size = 4;
 var grid = [];
+var arrows = [];
 var leaving = [];
 var shake = null;
 var won = false;
@@ -37,42 +38,57 @@ function pathLength(r, c, name) {
   return d.dc > 0 ? size - 1 - c : c;
 }
 
-// Arrows are placed one by one, each only where its way out is free at that moment. Taking
-// them out in the reverse order always works, so every level can be solved.
+// An arrow is a head cell plus a tail of cells behind it. Arrows are placed one by one, each
+// only where its tail fits and its way out is free at that moment. Taking them out in the
+// reverse order always works, so every level can be solved.
+function cellsOf(r, c, name, length) {
+  var d = DIRECTIONS[name];
+  var cells = [];
+  for (var i = 0; i < length; i++) cells.push([r - d.dr * i, c - d.dc * i]);
+  return cells;
+}
+
+function inside(r, c) { return r >= 0 && r < size && c >= 0 && c < size; }
+
+function pathFree(r, c, name) {
+  var d = DIRECTIONS[name];
+  for (var rr = r + d.dr, cc = c + d.dc; inside(rr, cc); rr += d.dr, cc += d.dc) {
+    if (grid[rr][cc] !== null) return false;
+  }
+  return true;
+}
+
 function buildLevel() {
   size = levelSize(level);
   grid = [];
+  arrows = [];
   for (var r = 0; r < size; r++) { var row = []; for (var c = 0; c < size; c++) row.push(null); grid.push(row); }
   var target = Math.round(size * size * Math.min(0.95, difficulty.fill + level * 0.01));
-  var placed = 0;
-  for (var tries = 0; tries < 2000 && placed < target; tries++) {
+  var filled = 0;
+  for (var tries = 0; tries < 4000 && filled < target; tries++) {
     var rr = Math.floor(Math.random() * size);
     var cc = Math.floor(Math.random() * size);
-    if (grid[rr][cc]) continue;
-    var options = DIRECTION_NAMES.filter(function (name) { return pathFree(rr, cc, name); });
+    if (grid[rr][cc] !== null) continue;
+    var length = difficulty.tail[0] + Math.floor(Math.random() * (difficulty.tail[1] - difficulty.tail[0] + 1));
+    var options = DIRECTION_NAMES.filter(function (name) {
+      var cells = cellsOf(rr, cc, name, length);
+      return cells.every(function (cell) { return inside(cell[0], cell[1]) && grid[cell[0]][cell[1]] === null; }) && pathFree(rr, cc, name);
+    });
     if (options.length === 0) continue;
     // Harder levels point arrows across the board, so they block more of the others.
     if (Math.random() < difficulty.tricky) options.sort(function (a, b) { return pathLength(rr, cc, b) - pathLength(rr, cc, a); });
     else options.sort(function () { return Math.random() - 0.5; });
-    grid[rr][cc] = options[0];
-    placed++;
+    var arrow = { id: arrows.length, dir: options[0], cells: cellsOf(rr, cc, options[0], length) };
+    arrows.push(arrow);
+    arrow.cells.forEach(function (cell) { grid[cell[0]][cell[1]] = arrow.id; });
+    filled += length;
   }
   leaving = [];
   won = false;
 }
 
-function pathFree(r, c, name) {
-  var d = DIRECTIONS[name];
-  for (var rr = r + d.dr, cc = c + d.dc; rr >= 0 && rr < size && cc >= 0 && cc < size; rr += d.dr, cc += d.dc) {
-    if (grid[rr][cc]) return false;
-  }
-  return true;
-}
-
 function arrowsLeft() {
-  var count = 0;
-  for (var r = 0; r < size; r++) for (var c = 0; c < size; c++) if (grid[r][c]) count++;
-  return count;
+  return arrows.filter(function (arrow) { return !arrow.gone; }).length;
 }
 
 function chooseDifficulty(key) {
@@ -117,25 +133,51 @@ function update(dt) {
   if (shake) { shake.t += dt; if (shake.t > SHAKE_SECONDS) shake = null; }
 }
 
-function drawArrow(x, y, cell, name, alpha) {
-  var d = DIRECTIONS[name];
-  var pad = cell * 0.08;
+function drawArrow(arrow, offsetX, offsetY, alpha) {
+  var b = ui.board;
+  var cell = cellSize();
+  var d = DIRECTIONS[arrow.dir];
+  var head = arrow.cells[0];
+  var tail = arrow.cells[arrow.cells.length - 1];
+  var hx = b.x + head[1] * cell + cell / 2 + offsetX, hy = b.y + head[0] * cell + cell / 2 + offsetY;
+  var tx = b.x + tail[1] * cell + cell / 2 + offsetX, ty = b.y + tail[0] * cell + cell / 2 + offsetY;
   ctx.globalAlpha = alpha;
-  box(x + pad, y + pad, cell - pad * 2, cell - pad * 2, d.color);
-  box(x + pad, y + pad, cell - pad * 2, cell * 0.1, "rgba(255,255,255,0.25)");
-  ctx.save();
-  ctx.translate(x + cell / 2, y + cell / 2);
-  ctx.rotate(d.angle);
-  var k = cell * 0.32;
-  ctx.fillStyle = "#fff";
+  ctx.strokeStyle = d.color;
+  ctx.lineCap = "round";
+  ctx.lineWidth = cell * 0.26;
   ctx.beginPath();
-  ctx.moveTo(k, 0);
-  ctx.lineTo(0, k * 0.8);
-  ctx.lineTo(0, k * 0.32);
-  ctx.lineTo(-k, k * 0.32);
-  ctx.lineTo(-k, -k * 0.32);
-  ctx.lineTo(0, -k * 0.32);
-  ctx.lineTo(0, -k * 0.8);
+  ctx.moveTo(tx, ty);
+  ctx.lineTo(hx, hy);
+  ctx.stroke();
+  ctx.save();
+  ctx.translate(tx, ty);
+  ctx.rotate(d.angle);
+  ctx.fillStyle = d.color;
+  [-1, 1].forEach(function (side) {
+    ctx.beginPath();
+    ctx.moveTo(cell * 0.1, 0);
+    ctx.lineTo(-cell * 0.2, side * cell * 0.3);
+    ctx.lineTo(-cell * 0.32, side * cell * 0.3);
+    ctx.lineTo(-cell * 0.08, 0);
+    ctx.closePath();
+    ctx.fill();
+  });
+  ctx.restore();
+  ctx.save();
+  ctx.translate(hx, hy);
+  ctx.rotate(d.angle);
+  ctx.fillStyle = d.color;
+  ctx.beginPath();
+  ctx.moveTo(cell * 0.42, 0);
+  ctx.lineTo(-cell * 0.05, cell * 0.36);
+  ctx.lineTo(-cell * 0.05, -cell * 0.36);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "rgba(255,255,255,0.35)";
+  ctx.beginPath();
+  ctx.moveTo(cell * 0.3, 0);
+  ctx.lineTo(0, cell * 0.22);
+  ctx.lineTo(0, 0);
   ctx.closePath();
   ctx.fill();
   ctx.restore();
@@ -155,24 +197,21 @@ function draw() {
   var b = ui.board;
   var cell = cellSize();
   box(b.x - 8, b.y - 8, b.size + 16, b.size + 16, "#0a2a2b");
-  for (var r = 0; r < size; r++) {
-    for (var c = 0; c < size; c++) {
-      var x = b.x + c * cell, y = b.y + r * cell;
-      box(x + 2, y + 2, cell - 4, cell - 4, "#164e50");
-      if (!grid[r][c]) continue;
-      var offset = 0;
-      if (shake && shake.r === r && shake.c === c) offset = Math.sin(shake.t * 60) * cell * 0.08;
-      var d = DIRECTIONS[grid[r][c]];
-      drawArrow(x + offset * Math.abs(d.dc || 1), y, cell, grid[r][c], 1);
-      if (shake && shake.r === r && shake.c === c) box(x + 4, y + 4, cell - 8, cell - 8, "rgba(255,0,0,0.25)");
+  for (var r = 0; r < size; r++) for (var c = 0; c < size; c++) box(b.x + c * cell + 2, b.y + r * cell + 2, cell - 4, cell - 4, "#164e50");
+  arrows.forEach(function (arrow) {
+    if (arrow.gone) return;
+    var offset = shake && shake.id === arrow.id ? Math.sin(shake.t * 60) * cell * 0.08 : 0;
+    drawArrow(arrow, offset, 0, 1);
+    if (shake && shake.id === arrow.id) {
+      arrow.cells.forEach(function (cellPos) { box(b.x + cellPos[1] * cell + 4, b.y + cellPos[0] * cell + 4, cell - 8, cell - 8, "rgba(255,0,0,0.22)"); });
     }
-  }
-  leaving.forEach(function (arrow) {
-    var d = DIRECTIONS[arrow.name];
-    var travel = (arrow.t / SLIDE_SECONDS) * b.size;
-    drawArrow(b.x + arrow.c * cell + d.dc * travel, b.y + arrow.r * cell + d.dr * travel, cell, arrow.name, 1 - arrow.t / SLIDE_SECONDS);
   });
-  button(ui.restart, "🔁 Forfra", "#868e96");
+  leaving.forEach(function (item) {
+    var d = DIRECTIONS[item.arrow.dir];
+    var travel = (item.t / SLIDE_SECONDS) * b.size;
+    drawArrow(item.arrow, d.dc * travel, d.dr * travel, 1 - item.t / SLIDE_SECONDS);
+  });
+    button(ui.restart, "🔁 Forfra", "#868e96");
   button(ui.records, "🏆 Rekorder", "#5c7cfa");
   button(ui.difficulty, difficulty.name, difficulty.color);
   if (level === 1 && arrowsLeft() > 0 && !won) text("👆 Tryk på en pil, der kan flyve ud", WIDTH / 2, ui.board.y + ui.board.size + (HEIGHT > WIDTH ? 230 : 40), 22, "#c3fae8");
@@ -223,11 +262,13 @@ function onTap(x, y) {
   var cell = cellSize();
   var c = Math.floor((x - b.x) / cell);
   var r = Math.floor((y - b.y) / cell);
-  if (r < 0 || r >= size || c < 0 || c >= size || !grid[r][c]) return;
-  var name = grid[r][c];
-  if (!pathFree(r, c, name)) { shake = { r: r, c: c, t: 0 }; sfx("bump"); return; }
-  grid[r][c] = null;
-  leaving.push({ r: r, c: c, name: name, t: 0 });
+  if (r < 0 || r >= size || c < 0 || c >= size || grid[r][c] === null) return;
+  var arrow = arrows[grid[r][c]];
+  var head = arrow.cells[0];
+  if (!pathFree(head[0], head[1], arrow.dir)) { shake = { id: arrow.id, t: 0 }; sfx("bump"); return; }
+  arrow.cells.forEach(function (cellPos) { grid[cellPos[0]][cellPos[1]] = null; });
+  arrow.gone = true;
+  leaving.push({ arrow: arrow, t: 0 });
   sfx("hop");
   if (arrowsLeft() === 0) {
     won = true;
