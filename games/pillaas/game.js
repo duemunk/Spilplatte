@@ -10,7 +10,11 @@ var DIRECTIONS = {
   up: { dr: -1, dc: 0, angle: -Math.PI / 2, color: "#51cf66" }
 };
 var DIRECTION_NAMES = ["right", "down", "left", "up"];
-var SNAKE_COLORS = ["#ff6b6b", "#fcc419", "#4dabf7", "#51cf66", "#cc5de8", "#ff922b", "#20c997", "#f06595"];
+var SNAKE_COLORS = [
+  "#ff6b6b", "#fcc419", "#4dabf7", "#51cf66", "#cc5de8", "#ff922b", "#20c997", "#f06595",
+  "#845ef7", "#94d82d", "#22b8cf", "#e64980", "#fab005", "#5c7cfa", "#ffffff", "#a9746e"
+];
+var RAINBOW = ["#ff6b6b", "#ff922b", "#fcc419", "#51cf66", "#4dabf7", "#845ef7"];
 var SLIDE_SECONDS = 0.6;
 var SHAKE_SECONDS = 0.3;
 
@@ -108,7 +112,10 @@ function buildLevel() {
     // Harder levels point arrows across the board, so they block more of the others.
     if (Math.random() < difficulty.tricky) options.sort(function (a, b) { return pathLength(rr, cc, b) - pathLength(rr, cc, a); });
     else options.sort(function () { return Math.random() - 0.5; });
-    var arrow = { id: arrows.length, dir: options[0], cells: growSnake(rr, cc, options[0], length), color: SNAKE_COLORS[arrows.length % SNAKE_COLORS.length] };
+    var arrow = { id: arrows.length, dir: options[0], cells: growSnake(rr, cc, options[0], length),
+      color: SNAKE_COLORS[Math.floor(Math.random() * SNAKE_COLORS.length)],
+      stripe: SNAKE_COLORS[Math.floor(Math.random() * SNAKE_COLORS.length)],
+      rainbow: Math.random() < 0.15 };
     arrows.push(arrow);
     arrow.cells.forEach(function (cell) { grid[cell[0]][cell[1]] = arrow.id; });
     filled += length;
@@ -203,7 +210,19 @@ function drawArrow(arrow, offsetX, offsetY, alpha, moved) {
   for (var i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
   if (points.length === 1) ctx.lineTo(points[0].x - d.dc * cell * 0.35, points[0].y - d.dr * cell * 0.35);
   ctx.stroke();
-  ctx.strokeStyle = "rgba(255,255,255,0.3)";
+  if (arrow.rainbow) {
+    for (var k = 1; k < points.length; k++) {
+      ctx.strokeStyle = RAINBOW[k % RAINBOW.length];
+      ctx.beginPath();
+      ctx.moveTo(points[k - 1].x, points[k - 1].y);
+      ctx.lineTo(points[k].x, points[k].y);
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for (var m = 1; m < points.length; m++) ctx.lineTo(points[m].x, points[m].y);
+  }
+  ctx.strokeStyle = arrow.stripe === arrow.color ? "rgba(255,255,255,0.35)" : arrow.stripe;
   ctx.lineWidth = cell * 0.08;
   ctx.setLineDash([cell * 0.12, cell * 0.18]);
   ctx.stroke();
@@ -219,6 +238,8 @@ function drawArrow(arrow, offsetX, offsetY, alpha, moved) {
   ctx.lineTo(cell * 0.18, -cell * 0.24);
   ctx.closePath();
   ctx.fill();
+  circle(cell * 0.14, -cell * 0.13, cell * 0.1, "#333");
+  circle(cell * 0.14, cell * 0.13, cell * 0.1, "#333");
   circle(cell * 0.14, -cell * 0.13, cell * 0.08, "#fff");
   circle(cell * 0.14, cell * 0.13, cell * 0.08, "#fff");
   circle(cell * 0.17, -cell * 0.13, cell * 0.04, "#111");
