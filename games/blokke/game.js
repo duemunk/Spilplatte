@@ -167,6 +167,30 @@ function block(x, y, size, color) {
 
 function slotCenter(i) { return ui.slots[i]; }
 
+// Cells that would vanish if the piece were dropped here; cached while the spot is unchanged.
+var preview = { key: "", cells: [] };
+
+function linesClearedBy(piece, row, col) {
+  var key = row + "," + col + "," + tray.indexOf(piece);
+  if (preview.key === key) return preview.cells;
+  var filled = {};
+  piece.cells.forEach(function (cell) { filled[(row + cell[0]) + "," + (col + cell[1])] = true; });
+  function taken(r, c) { return board[r][c] || filled[r + "," + c]; }
+  var cells = [];
+  for (var r = 0; r < SIZE; r++) {
+    var fullRow = true;
+    for (var c = 0; c < SIZE; c++) if (!taken(r, c)) fullRow = false;
+    if (fullRow) for (var c2 = 0; c2 < SIZE; c2++) cells.push({ r: r, c: c2 });
+  }
+  for (var cc = 0; cc < SIZE; cc++) {
+    var fullCol = true;
+    for (var rr = 0; rr < SIZE; rr++) if (!taken(rr, cc)) fullCol = false;
+    if (fullCol) for (var r2 = 0; r2 < SIZE; r2++) cells.push({ r: r2, c: cc });
+  }
+  preview = { key: key, cells: cells };
+  return cells;
+}
+
 function dropSpot() {
   var piece = dragging.piece;
   var size = pieceSize(piece);
@@ -201,6 +225,12 @@ function draw() {
   if (dragging) {
     var spot = dropSpot();
     if (fits(dragging.piece, spot.row, spot.col)) {
+      var lines = linesClearedBy(dragging.piece, spot.row, spot.col);
+      var glow = 0.3 + 0.15 * Math.sin(Date.now() / 120);
+      lines.forEach(function (cell) {
+        block(BOARD_X + cell.c * CELL, BOARD_Y + cell.r * CELL, CELL, dragging.piece.color);
+        box(BOARD_X + cell.c * CELL + 2, BOARD_Y + cell.r * CELL + 2, CELL - 4, CELL - 4, "rgba(255,255,255," + glow.toFixed(2) + ")");
+      });
       dragging.piece.cells.forEach(function (cell) {
         box(BOARD_X + (spot.col + cell[1]) * CELL + 2, BOARD_Y + (spot.row + cell[0]) * CELL + 2, CELL - 4, CELL - 4, "rgba(255,255,255,0.35)");
       });
@@ -268,6 +298,7 @@ function onRelease() {
   var index = dragging.index;
   dragging = null;
   if (!fits(piece, spot.row, spot.col)) { sfx("bump"); return; }
+  preview.key = "";
   place(piece, spot.row, spot.col);
   tray[index] = null;
   if (tray.every(function (p) { return !p; })) newTray();
