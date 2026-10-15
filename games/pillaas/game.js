@@ -228,7 +228,7 @@ function onTap(x, y) {
   if (!pathFree(r, c, name)) { shake = { r: r, c: c, t: 0 }; sfx("bump"); return; }
   grid[r][c] = null;
   leaving.push({ r: r, c: c, name: name, t: 0 });
-  sfx("laser");
+  sfx("hop");
   if (arrowsLeft() === 0) {
     won = true;
     playerSave("level-" + difficulty.key, level + 1);
