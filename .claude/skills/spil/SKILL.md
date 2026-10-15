@@ -77,7 +77,8 @@ For a new game, these are the choices that can come up — use the ones that hel
      Make it square and small: `sips -c <side> <side> <in> --out games/<folder>/icon.png` then
      `sips -Z 256 games/<folder>/icon.png`.
    Show them the icon (Read the PNG and SendUserFile it) and ask "Er den god? 😊".
-   Set `"icon": "icon.png"` in `games.json` (keep `emoji` too, as a fallback).
+   Save it as `icon.png` in the game folder; `node tools/seal.mjs` renames it with a version
+   (`icon_<hash>.png`) and updates `games.json` (keep `emoji` too, as a fallback).
 5. **Lyde** — pick sounds for the important moments (fx "når man får point", "når man taber").
    Ready-made sounds, used with `sfx("<name>")`: `pop`, `hop`, `mont` (Mønt), `laser`, `bump`,
    `boing`, `eksplosion`, `klik`, `ballon`, `hammer`, `sav`, `sejr`, `tab`. If none fits, make a new

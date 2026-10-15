@@ -89,7 +89,9 @@ shared by all games — kids type their own names there, so names never reach th
    `onDrag`, `onRelease`. The world is always 1024 x 768, landscape.
 3. Add an entry to `games.json` (`title`, `folder`, `emoji`, `icon`, `color`) and the author to
    `private/authors.json`, then run `node tools/seal.mjs`.
-   Icons are 256×256 PNGs in the game folder; render one with `tools/make-icon.swift`.
+   Icons are 256×256 PNGs in the game folder; render one with `tools/make-icon.swift`. Always
+   save a new or changed icon as `icon.png` — `tools/seal.mjs` renames it to `icon_<hash>.png`
+   and updates `games.json`, so the new picture gets a new URL and no cache can show the old one.
    Sound effects for `sfx(name)` are previewed at `shared/lyde.html`.
 4. Images and sounds go in the game's own folder.
 
