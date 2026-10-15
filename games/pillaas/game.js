@@ -28,7 +28,9 @@ var DIFFICULTIES = [
   { key: "umulig", name: "Umulig 💀", base: 8, max: 12, fill: 1, tricky: 1, tail: [3, 6], color: "#343a40" },
   { key: "vulkan", name: "Vulkan 🌋", base: 9, max: 13, fill: 1, tricky: 1, tail: [3, 7], color: "#c92a2a" },
   { key: "galakse", name: "Galakse 🌌", base: 10, max: 14, fill: 1, tricky: 1, tail: [4, 8], color: "#3b5bdb" },
-  { key: "gud", name: "Gud 😇", base: 12, max: 15, fill: 1, tricky: 1, tail: [4, 10], color: "#f59f00" }
+  { key: "gud", name: "Gud 😇", base: 12, max: 14, fill: 1, tricky: 1, tail: [4, 10], color: "#f59f00" },
+  { key: "monster", name: "Monster 👹", base: 12, max: 14, fill: 1, tricky: 1, tail: [6, 14], color: "#5f3dc4" },
+  { key: "uendelig", name: "Uendelig ♾️", base: 14, max: 14, fill: 1, tricky: 1, tail: [8, 20], color: "#212529" }
 ];
 var difficulty = DIFFICULTIES[1];
 var choosing = false;
@@ -291,8 +293,8 @@ function draw() {
   if (choosing) {
     var mx = WIDTH / 2, my = HEIGHT / 2;
     box(0, 0, WIDTH, HEIGHT, "rgba(0,0,0,0.55)");
-    box(mx - 330, my - 320, 660, 620, "#fff8e7");
-    text("Hvor svært skal det være?", mx, my - 275, 30, "#222");
+    box(mx - 330, my - 350, 660, 700, "#fff8e7");
+    text("Hvor svært skal det være?", mx, my - 310, 30, "#222");
     DIFFICULTIES.forEach(function (d, i) {
       var r = difficultyRect(i);
       box(r.x, r.y, r.w, r.h, d === difficulty ? d.color : "#adb5bd");
@@ -309,7 +311,7 @@ function draw() {
   }
 }
 
-function difficultyRect(i) { return { x: WIDTH / 2 - 305 + (i % 2) * 310, y: HEIGHT / 2 - 230 + Math.floor(i / 2) * 100, w: 300, h: 84 }; }
+function difficultyRect(i) { return { x: WIDTH / 2 - 305 + (i % 2) * 310, y: HEIGHT / 2 - 270 + Math.floor(i / 2) * 102, w: 300, h: 88 }; }
 
 function inRect(x, y, r) { return x > r.x && x < r.x + r.w && y > r.y && y < r.y + r.h; }
 
