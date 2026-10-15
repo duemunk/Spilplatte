@@ -430,14 +430,18 @@
     onPress(add, newPlayerForm);
     grid.appendChild(add);
     panel.appendChild(grid);
-    // Closing keeps the current player (the last one chosen, or Gæst).
+    // ✖️ before the game has started leaves the game; later it just closes and keeps playing.
     var close = el("button", "people-close", "✖️");
     close.setAttribute("aria-label", "Luk");
-    function keepCurrent() { closeOverlay(); if (!started) start(); }
-    onPress(close, keepCurrent);
+    function leaveOrClose() {
+      if (!started) { location.href = "../../?v=" + Date.now(); return; }
+      closeOverlay();
+    }
+    onPress(close, leaveOrClose);
     panel.appendChild(close);
-    overlay.addEventListener("click", function (event) { if (event.target === overlay) keepCurrent(); });
-    overlay.addEventListener("touchend", function (event) { if (event.target === overlay) keepCurrent(); });
+    function outside(event) { if (event.target === overlay && started) closeOverlay(); }
+    overlay.addEventListener("click", outside);
+    overlay.addEventListener("touchend", outside);
   };
 
   function escapeHtml(text) {
