@@ -103,6 +103,11 @@ var HINT_AFTER_SECONDS = 20;
 var REVEAL_DISTANCE = 140;
 var DETECTOR_RANGE = 520;
 var detectorTimer = 0;
+var DIGS_NEEDED = 3;
+var DIG_REACH = 70;
+var MAX_HOLES = 40;
+var holes = [];
+var dirt = [];
 var FLOOR_COLORS = { a: "#cdb592", b: "#b5ada6", c: "#cfe3f0", d: "#d9c4a3", e: "#e6d3b8", f: "#bfae99" };
 var WALL = "#4a4a55";
 var WALL_TOP = "#6b6b78";
@@ -156,8 +161,10 @@ function startRound() {
     if (solid(col, row) || taken[col + "," + row]) continue;
     if (Math.abs(col - start.col) + Math.abs(row - start.row) < 4) continue;
     taken[col + "," + row] = true;
-    treasures.push({ x: col * TILE + TILE / 2, y: row * TILE + TILE / 2, diamond: treasures.length % 3 === 0, phase: Math.random() * 6, seen: false });
+    treasures.push({ x: col * TILE + TILE / 2, y: row * TILE + TILE / 2, diamond: treasures.length % 3 === 0, phase: Math.random() * 6, seen: false, digs: 0 });
   }
+  holes = [];
+  dirt = [];
   found = 0;
   roundTime = 0;
   sinceFind = 0;
@@ -176,6 +183,13 @@ function update(dt) {
     floaters[f].life -= dt;
     floaters[f].y -= 50 * dt;
     if (floaters[f].life <= 0) floaters.splice(f, 1);
+  }
+  for (var q = dirt.length - 1; q >= 0; q--) {
+    dirt[q].life -= dt;
+    dirt[q].x += dirt[q].vx * dt;
+    dirt[q].y += dirt[q].vy * dt;
+    dirt[q].vy += 700 * dt;
+    if (dirt[q].life <= 0) dirt.splice(q, 1);
   }
   if (done) return;
   roundTime += dt;
@@ -204,27 +218,48 @@ function update(dt) {
     beep(500 + (1 - nearestHidden / DETECTOR_RANGE) * 700, 0.05);
     detectorTimer = 0.15 + (nearestHidden / DETECTOR_RANGE) * 1.1;
   }
-  for (var i = treasures.length - 1; i >= 0; i--) {
-    var t = treasures[i];
-    if (distance(t.x, t.y, hero.x, hero.y) < 40) {
-      var value = t.diamond ? DIAMOND_VALUE : GOLD_VALUE;
-      total += value;
-      found++;
-      sinceFind = 0;
-      floaters.push({ words: t.diamond ? "+5 💎" : "+1", x: t.x, y: t.y - 30, life: 1 });
-      treasures.splice(i, 1);
-      sfx(t.diamond ? "hop" : "mont");
-      playerSave("total", total);
-      if (treasures.length === 0) {
-        done = true;
-        round++;
-        playerSave("round", round);
-        setTimeout(function () { sfx("sejr"); }, 200);
-      }
-    }
-  }
   camera.x = WORLD_W <= WIDTH ? (WORLD_W - WIDTH) / 2 : Math.max(0, Math.min(WORLD_W - WIDTH, hero.x - WIDTH / 2));
   camera.y = WORLD_H <= HEIGHT ? (WORLD_H - HEIGHT) / 2 : Math.max(0, Math.min(WORLD_H - HEIGHT, hero.y - HEIGHT / 2));
+}
+
+function collect(t) {
+  var value = t.diamond ? DIAMOND_VALUE : GOLD_VALUE;
+  total += value;
+  found++;
+  sinceFind = 0;
+  floaters.push({ words: t.diamond ? "+5 💎" : "+1", x: t.x, y: t.y - 40, life: 1 });
+  treasures.splice(treasures.indexOf(t), 1);
+  sfx(t.diamond ? "hop" : "mont");
+  playerSave("total", total);
+  if (treasures.length === 0) {
+    done = true;
+    round++;
+    playerSave("round", round);
+    setTimeout(function () { sfx("sejr"); }, 200);
+  }
+}
+
+// Dig where you stand: three digs bring a buried treasure up; an empty spot leaves a hole.
+function dig() {
+  for (var k = 0; k < 6; k++) dirt.push({ x: hero.x + random(-10, 10), y: hero.y + 20, vx: random(-140, 140), vy: random(-260, -120), life: 0.5 });
+  var target = null;
+  treasures.forEach(function (t) { var d = distance(t.x, t.y, hero.x, hero.y); if (d < DIG_REACH && (!target || d < target.d)) target = { t: t, d: d }; });
+  if (!target) {
+    sfx("bump");
+    holes.push({ x: hero.x, y: hero.y + 16 });
+    if (holes.length > MAX_HOLES) holes.shift();
+    floaters.push({ words: "Ingenting her 🤷", x: hero.x, y: hero.y - 50, life: 0.9 });
+    return;
+  }
+  var t = target.t;
+  t.seen = true;
+  t.digs++;
+  sfx("hammer");
+  if (t.digs >= DIGS_NEEDED) { holes.push({ x: t.x, y: t.y }); collect(t); }
+}
+
+function digButton() {
+  return { x: WIDTH - 200, y: HEIGHT - 200, w: 180, h: 180 };
 }
 
 function drawGold(x, y) {
@@ -289,13 +324,22 @@ function draw() {
   ctx.translate(-Math.round(camera.x), -Math.round(camera.y));
   drawMap();
   PROPS.forEach(function (p) { emoji(p.emoji, p.col * TILE + TILE / 2, p.row * TILE + TILE / 2, 70); });
+  holes.forEach(function (h) { circle(h.x, h.y, 20, "#6b4f3a"); circle(h.x, h.y + 3, 14, "#3e2c20"); });
   treasures.forEach(function (t) {
     if (!t.seen) return;
-    var bob = Math.sin(sparkle * 3 + t.phase) * 4;
-    if (t.diamond) emoji("💎", t.x, t.y + bob, 40);
-    else drawGold(t.x, t.y + bob);
-    if (Math.sin(sparkle * 5 + t.phase) > 0.85) emoji("✨", t.x + 16, t.y - 18 + bob, 22);
+    var mound = 1 - t.digs / DIGS_NEEDED;
+    circle(t.x, t.y + 6, 14 + mound * 16, "#8d6e4f");
+    circle(t.x - 4, t.y + 2, 6 + mound * 8, "#a1846a");
+    var peek = t.digs > 0;
+    if (peek) {
+      if (t.diamond) emoji("💎", t.x, t.y - 4, 22 + t.digs * 6);
+      else drawGold(t.x, t.y);
+    } else {
+      text("❌", t.x, t.y - 2, 22);
+    }
+    if (Math.sin(sparkle * 5 + t.phase) > 0.85) emoji("✨", t.x + 16, t.y - 18, 22);
   });
+  dirt.forEach(function (d) { box(d.x - 4, d.y - 4, 8, 8, "#7a5a3f"); });
   var closest = Infinity;
   treasures.forEach(function (t) { if (!t.seen) closest = Math.min(closest, distance(t.x, t.y, hero.x, hero.y)); });
   if (closest < DETECTOR_RANGE) {
@@ -314,9 +358,15 @@ function draw() {
   text(player().emoji + " 💰 " + total, WIDTH - 125, top + 91, 24, "#ffd43b");
   box(WIDTH - 230, top + 126, 210, 64, "#5c7cfa");
   text("🏆 Rekorder", WIDTH - 125, top + 158, 22);
+  var b = digButton();
+  var onMound = treasures.some(function (t) { return t.seen && distance(t.x, t.y, hero.x, hero.y) < DIG_REACH; });
+  circle(b.x + b.w / 2, b.y + b.h / 2 + 6, b.w / 2, "rgba(0,0,0,0.3)");
+  circle(b.x + b.w / 2, b.y + b.h / 2, b.w / 2, onMound ? "#e8590c" : "#8d6e4f");
+  text("⛏️", b.x + b.w / 2, b.y + b.h / 2 - 16, 56);
+  text("Grav", b.x + b.w / 2, b.y + b.h / 2 + 44, 26);
   if (!steering && found === 0 && roundTime < 8) {
     text("👆 Hold fingeren der, hvor du vil gå hen", WIDTH / 2, HEIGHT - 90, 24, "#fff");
-    text("🔊 Skattene er gemt — bip-lyden bliver hurtigere, når du er tæt på!", WIDTH / 2, HEIGHT - 50, 20, "#ffe066");
+    text("🔊 Bip = skat i nærheden · ❌ = grav her med ⛏️", WIDTH / 2, HEIGHT - 50, 20, "#ffe066");
   }
 
   if (done) {
@@ -337,6 +387,8 @@ function onTap(x, y) {
   }
   var top = WIDTH / 2 - 230 < RESERVED.w ? RESERVED.h + 10 : 12;
   if (x > WIDTH - 230 && x < WIDTH - 20 && y > top + 126 && y < top + 190) { showRecords("total", " 💰"); sfx("klik"); return; }
+  var b = digButton();
+  if (distance(x, y, b.x + b.w / 2, b.y + b.h / 2) < b.w / 2) { dig(); return; }
   steering = { x: x, y: y };
 }
 
