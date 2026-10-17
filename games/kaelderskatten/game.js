@@ -367,24 +367,51 @@ function drawGold(x, y) {
   box(x - 10, y - 6, 20, 5, "#ffe066");
 }
 
+// The map is drawn as strips: each run of identical tiles in a row is one rectangle, and the
+// tile grid is a few full-length lines. This keeps the old iPad Air to ~100 fills per frame.
+var ROW_RUNS = MAP.map(function (line, row) {
+  var runs = [];
+  for (var col = 0; col < COLS;) {
+    var ch = line.charAt(col), end = col;
+    while (end + 1 < COLS && line.charAt(end + 1) === ch) end++;
+    runs.push({ start: col, end: end, ch: ch });
+    col = end + 1;
+  }
+  return runs;
+});
+var EDGE_RUNS = MAP.map(function (line, row) {
+  var runs = [];
+  if (row + 1 >= ROWS) return runs;
+  var below = MAP[row + 1];
+  for (var col = 0; col < COLS;) {
+    var edge = line.charAt(col) === "#" && below.charAt(col) !== "#";
+    var end = col;
+    while (end + 1 < COLS && (line.charAt(end + 1) === "#" && below.charAt(end + 1) !== "#") === edge) end++;
+    if (edge) runs.push({ start: col, end: end });
+    col = end + 1;
+  }
+  return runs;
+});
+
 function drawMap() {
   var c0 = Math.max(0, Math.floor(camera.x / TILE)), c1 = Math.min(COLS - 1, Math.floor((camera.x + WIDTH) / TILE));
   var r0 = Math.max(0, Math.floor(camera.y / TILE)), r1 = Math.min(ROWS - 1, Math.floor((camera.y + HEIGHT) / TILE));
   for (var row = r0; row <= r1; row++) {
-    var line = MAP[row];
-    for (var col = c0; col <= c1; col++) {
-      var ch = line.charAt(col);
-      var x = col * TILE, y = row * TILE;
-      if (ch === "#") {
-        box(x, y, TILE, TILE, WALL);
-        if (row + 1 < ROWS && MAP[row + 1].charAt(col) !== "#") box(x, y + TILE - 10, TILE, 10, WALL_TOP);
-      } else {
-        box(x, y, TILE, TILE, FLOOR_COLORS[ch] || "#d9c4a3");
-        box(x, y, TILE, 1, "rgba(0,0,0,0.06)");
-        box(x, y, 1, TILE, "rgba(0,0,0,0.06)");
-      }
-    }
+    var y = row * TILE;
+    ROW_RUNS[row].forEach(function (run) {
+      if (run.end < c0 || run.start > c1) return;
+      var a = Math.max(run.start, c0), b = Math.min(run.end, c1);
+      box(a * TILE, y, (b - a + 1) * TILE, TILE, run.ch === "#" ? WALL : FLOOR_COLORS[run.ch] || "#d9c4a3");
+    });
+    EDGE_RUNS[row].forEach(function (run) {
+      if (run.end < c0 || run.start > c1) return;
+      var a = Math.max(run.start, c0), b = Math.min(run.end, c1);
+      box(a * TILE, y + TILE - 10, (b - a + 1) * TILE, 10, WALL_TOP);
+    });
   }
+  var left = c0 * TILE, right = (c1 + 1) * TILE, top = r0 * TILE, bottom = (r1 + 1) * TILE;
+  for (var gy = top; gy <= bottom; gy += TILE) box(left, gy, right - left, 1, "rgba(0,0,0,0.07)");
+  for (var gx = left; gx <= right; gx += TILE) box(gx, top, 1, bottom - top, "rgba(0,0,0,0.07)");
 }
 
 function drawHint() {
@@ -413,11 +440,14 @@ function clock(seconds) {
 
 function draw() {
   if (scene === "gym") { drawGym(); return; }
-  clear(WALL);
+  box(0, 0, WIDTH, HEIGHT, WALL);
   ctx.save();
   ctx.translate(-Math.round(camera.x), -Math.round(camera.y));
   drawMap();
-  PROPS.forEach(function (p) { emoji(p.emoji, p.col * TILE + TILE / 2, p.row * TILE + TILE / 2, 70); });
+  PROPS.forEach(function (p) {
+    var px = p.col * TILE + TILE / 2, py = p.row * TILE + TILE / 2;
+    if (px > camera.x - 60 && px < camera.x + WIDTH + 60 && py > camera.y - 60 && py < camera.y + HEIGHT + 60) emoji(p.emoji, px, py, 70);
+  });
   holes.forEach(function (h) { circle(h.x, h.y, 20, "#6b4f3a"); circle(h.x, h.y + 3, 14, "#3e2c20"); });
   treasures.forEach(function (t) {
     if (!t.seen) return;
