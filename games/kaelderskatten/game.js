@@ -107,6 +107,20 @@ var DIGS_NEEDED = 3;
 var DIG_REACH = 70;
 var MAX_HOLES = 40;
 var holes = [];
+var scene = "basement";
+var portal = null;
+var strength = 0;
+var STRENGTH_PER_LEVEL = 3;
+var TAPS_PER_SET = 12;
+var STATIONS = [
+  { emoji: "🏋️", name: "Vægte", color: "#e8590c" },
+  { emoji: "🚴", name: "Cykel", color: "#1c7ed6" },
+  { emoji: "🤸", name: "Gymnastik", color: "#2f9e44" }
+];
+var stationTaps = [0, 0, 0];
+var flex = 0;
+
+function digsNeeded() { return Math.max(1, DIGS_NEEDED - Math.floor(strength / STRENGTH_PER_LEVEL)); }
 var dirt = [];
 var FLOOR_COLORS = { a: "#cdb592", b: "#b5ada6", c: "#cfe3f0", d: "#d9c4a3", e: "#e6d3b8", f: "#bfae99" };
 var WALL = "#4a4a55";
@@ -174,6 +188,7 @@ function startRound() {
 function setup() {
   round = playerLoad("round", 1);
   total = playerLoad("total", 0);
+  strength = playerLoad("strength", 0);
   startRound();
 }
 
@@ -191,7 +206,8 @@ function update(dt) {
     dirt[q].vy += 700 * dt;
     if (dirt[q].life <= 0) dirt.splice(q, 1);
   }
-  if (done) return;
+  flex = Math.max(0, flex - dt);
+  if (done || scene === "gym") return;
   roundTime += dt;
   sinceFind += dt;
   if (steering) {
@@ -218,6 +234,7 @@ function update(dt) {
     beep(500 + (1 - nearestHidden / DETECTOR_RANGE) * 700, 0.05);
     detectorTimer = 0.15 + (nearestHidden / DETECTOR_RANGE) * 1.1;
   }
+  if (portal && distance(portal.x, portal.y, hero.x, hero.y) < 45) { scene = "gym"; steering = null; sfx("boing"); }
   camera.x = WORLD_W <= WIDTH ? (WORLD_W - WIDTH) / 2 : Math.max(0, Math.min(WORLD_W - WIDTH, hero.x - WIDTH / 2));
   camera.y = WORLD_H <= HEIGHT ? (WORLD_H - HEIGHT) / 2 : Math.max(0, Math.min(WORLD_H - HEIGHT, hero.y - HEIGHT / 2));
 }
@@ -255,7 +272,83 @@ function dig() {
   t.seen = true;
   t.digs++;
   sfx("hammer");
-  if (t.digs >= DIGS_NEEDED) { holes.push({ x: t.x, y: t.y }); collect(t); }
+  if (t.digs >= digsNeeded()) { holes.push({ x: t.x, y: t.y }); collect(t); }
+}
+
+function portalButton() { return { x: 20, y: HEIGHT - 200, w: 180, h: 180 }; }
+
+function openPortal() {
+  var spots = [[90, 0], [-90, 0], [0, 90], [0, -90]];
+  for (var i = 0; i < spots.length; i++) {
+    var px = hero.x + spots[i][0], py = hero.y + spots[i][1];
+    if (!blockedAt(px, py)) { portal = { x: px, y: py }; sfx("laser"); return; }
+  }
+  sfx("bump");
+}
+
+function drawPortal(x, y, size) {
+  var colors = ["#7048e8", "#9775fa", "#4dabf7", "#d0bfff"];
+  for (var i = 0; i < 4; i++) circle(x, y, size * (1 - i * 0.22) * (1 + 0.06 * Math.sin(sparkle * 6 + i)), colors[(i + Math.floor(sparkle * 4)) % 4]);
+}
+
+function stationRect(i) {
+  var portrait = HEIGHT > WIDTH;
+  var w = portrait ? WIDTH - 80 : 280, h = portrait ? 220 : 320;
+  var top = Math.max(RESERVED.h + 140, portrait ? 300 : 220);
+  return portrait ? { x: 40, y: top + i * (h + 20), w: w, h: h } : { x: WIDTH / 2 - 450 + i * 310, y: top, w: w, h: h };
+}
+
+function backButton() { return { x: WIDTH / 2 - 180, y: HEIGHT - 130, w: 360, h: 100 }; }
+
+function drawGym() {
+  clear("#2b2d42");
+  for (var y = 0; y < HEIGHT; y += 80) box(0, y, WIDTH, 40, "rgba(255,255,255,0.03)");
+  var top = Math.max(RESERVED.h + 20, 30);
+  text("💪 Fitnesscenter", WIDTH / 2, top + 20, 44, "#ffd43b");
+  text("Styrke: " + strength + "  ·  Du graver med " + digsNeeded() + " slag ⛏️", WIDTH / 2, top + 75, 26, "#fff");
+  var toNext = STRENGTH_PER_LEVEL - (strength % STRENGTH_PER_LEVEL);
+  text(digsNeeded() > 1 ? "Træn " + toNext + " gang" + (toNext > 1 ? "e" : "") + " mere for at grave hurtigere" : "Du er SUPER stærk! 🦾", WIDTH / 2, top + 110, 20, "#cfd3dc");
+  STATIONS.forEach(function (st, i) {
+    var r = stationRect(i);
+    box(r.x, r.y + 6, r.w, r.h, "rgba(0,0,0,0.3)");
+    box(r.x, r.y, r.w, r.h, st.color);
+    var bounce = stationTaps[i] % 2 ? -10 : 0;
+    emoji(st.emoji, r.x + r.w / 2, r.y + r.h * 0.38 + bounce, Math.min(110, r.h * 0.45));
+    text(st.name, r.x + r.w / 2, r.y + r.h * 0.7, 26);
+    box(r.x + 20, r.y + r.h - 34, r.w - 40, 16, "rgba(0,0,0,0.3)");
+    box(r.x + 20, r.y + r.h - 34, (r.w - 40) * stationTaps[i] / TAPS_PER_SET, 16, "#ffd43b");
+  });
+  if (flex > 0) emoji("💪", WIDTH / 2, HEIGHT / 2, 120 + flex * 80);
+  var back = backButton();
+  box(back.x, back.y + 6, back.w, back.h, "rgba(0,0,0,0.3)");
+  box(back.x, back.y, back.w, back.h, "#7048e8");
+  text("🌀 Tilbage til kælderen", back.x + back.w / 2, back.y + back.h / 2, 26);
+  text("👆 Tryk hurtigt på en maskine for at træne", WIDTH / 2, back.y - 30, 20, "#cfd3dc");
+}
+
+function tapGym(x, y) {
+  var back = backButton();
+  if (x > back.x && x < back.x + back.w && y > back.y && y < back.y + back.h) {
+    scene = "basement";
+    if (portal) { hero.x = portal.x + 70; hero.y = portal.y; if (blockedAt(hero.x, hero.y)) { hero.x = portal.x; hero.y = portal.y + 70; } }
+    portal = null;
+    sfx("boing");
+    return;
+  }
+  STATIONS.forEach(function (st, i) {
+    var r = stationRect(i);
+    if (x < r.x || x > r.x + r.w || y < r.y || y > r.y + r.h) return;
+    stationTaps[i]++;
+    sfx("klik");
+    if (stationTaps[i] >= TAPS_PER_SET) {
+      stationTaps[i] = 0;
+      var before = digsNeeded();
+      strength++;
+      playerSave("strength", strength);
+      flex = 0.8;
+      sfx(digsNeeded() < before ? "sejr" : "hop");
+    }
+  });
 }
 
 function digButton() {
@@ -319,6 +412,7 @@ function clock(seconds) {
 }
 
 function draw() {
+  if (scene === "gym") { drawGym(); return; }
   clear(WALL);
   ctx.save();
   ctx.translate(-Math.round(camera.x), -Math.round(camera.y));
@@ -327,7 +421,7 @@ function draw() {
   holes.forEach(function (h) { circle(h.x, h.y, 20, "#6b4f3a"); circle(h.x, h.y + 3, 14, "#3e2c20"); });
   treasures.forEach(function (t) {
     if (!t.seen) return;
-    var mound = 1 - t.digs / DIGS_NEEDED;
+    var mound = 1 - t.digs / digsNeeded();
     circle(t.x, t.y + 6, 14 + mound * 16, "#8d6e4f");
     circle(t.x - 4, t.y + 2, 6 + mound * 8, "#a1846a");
     var peek = t.digs > 0;
@@ -346,6 +440,7 @@ function draw() {
     var heat = 1 - closest / DETECTOR_RANGE;
     circle(hero.x, hero.y, 36 + heat * 20, "rgba(255,212,59," + (0.15 + heat * 0.35).toFixed(2) + ")");
   }
+  if (portal) drawPortal(portal.x, portal.y, 46);
   emoji("🧒", hero.x, hero.y, 50);
   drawHint();
   floaters.forEach(function (f) { text(f.words, f.x, f.y, 28, "#fff"); });
@@ -358,6 +453,11 @@ function draw() {
   text(player().emoji + " 💰 " + total, WIDTH - 125, top + 91, 24, "#ffd43b");
   box(WIDTH - 230, top + 126, 210, 64, "#5c7cfa");
   text("🏆 Rekorder", WIDTH - 125, top + 158, 22);
+  var pb = portalButton();
+  circle(pb.x + pb.w / 2, pb.y + pb.h / 2 + 6, pb.w / 2, "rgba(0,0,0,0.3)");
+  circle(pb.x + pb.w / 2, pb.y + pb.h / 2, pb.w / 2, portal ? "#9775fa" : "#7048e8");
+  text("🌀", pb.x + pb.w / 2, pb.y + pb.h / 2 - 16, 56);
+  text(portal ? "Gå ind!" : "Portal", pb.x + pb.w / 2, pb.y + pb.h / 2 + 44, 24);
   var b = digButton();
   var onMound = treasures.some(function (t) { return t.seen && distance(t.x, t.y, hero.x, hero.y) < DIG_REACH; });
   circle(b.x + b.w / 2, b.y + b.h / 2 + 6, b.w / 2, "rgba(0,0,0,0.3)");
@@ -365,8 +465,8 @@ function draw() {
   text("⛏️", b.x + b.w / 2, b.y + b.h / 2 - 16, 56);
   text("Grav", b.x + b.w / 2, b.y + b.h / 2 + 44, 26);
   if (!steering && found === 0 && roundTime < 8) {
-    text("👆 Hold fingeren der, hvor du vil gå hen", WIDTH / 2, HEIGHT - 90, 24, "#fff");
-    text("🔊 Bip = skat i nærheden · ❌ = grav her med ⛏️", WIDTH / 2, HEIGHT - 50, 20, "#ffe066");
+    text("👆 Hold fingeren der, hvor du vil gå hen", WIDTH / 2, HEIGHT - 260, 24, "#fff");
+    text("🔊 Bip = skat i nærheden · ❌ = grav her med ⛏️", WIDTH / 2, HEIGHT - 225, 20, "#ffe066");
   }
 
   if (done) {
@@ -381,6 +481,7 @@ function draw() {
 }
 
 function onTap(x, y) {
+  if (scene === "gym") { tapGym(x, y); return; }
   if (done) {
     if (Math.abs(x - WIDTH / 2) < 150 && y > HEIGHT / 2 + 40 && y < HEIGHT / 2 + 130) { startRound(); sfx("klik"); }
     return;
@@ -389,6 +490,11 @@ function onTap(x, y) {
   if (x > WIDTH - 230 && x < WIDTH - 20 && y > top + 126 && y < top + 190) { showRecords("total", " 💰"); sfx("klik"); return; }
   var b = digButton();
   if (distance(x, y, b.x + b.w / 2, b.y + b.h / 2) < b.w / 2) { dig(); return; }
+  var pb = portalButton();
+  if (distance(x, y, pb.x + pb.w / 2, pb.y + pb.h / 2) < pb.w / 2) {
+    if (portal) { scene = "gym"; steering = null; sfx("boing"); } else openPortal();
+    return;
+  }
   steering = { x: x, y: y };
 }
 
