@@ -99,7 +99,10 @@ var SPEED = 320;
 var RADIUS = 18;
 var DIAMOND_VALUE = 5;
 var GOLD_VALUE = 1;
-var HINT_AFTER_SECONDS = 8;
+var HINT_AFTER_SECONDS = 20;
+var REVEAL_DISTANCE = 140;
+var DETECTOR_RANGE = 520;
+var detectorTimer = 0;
 var FLOOR_COLORS = { a: "#cdb592", b: "#b5ada6", c: "#cfe3f0", d: "#d9c4a3", e: "#e6d3b8", f: "#bfae99" };
 var WALL = "#4a4a55";
 var WALL_TOP = "#6b6b78";
@@ -153,7 +156,7 @@ function startRound() {
     if (solid(col, row) || taken[col + "," + row]) continue;
     if (Math.abs(col - start.col) + Math.abs(row - start.row) < 4) continue;
     taken[col + "," + row] = true;
-    treasures.push({ x: col * TILE + TILE / 2, y: row * TILE + TILE / 2, diamond: treasures.length % 3 === 0, phase: Math.random() * 6 });
+    treasures.push({ x: col * TILE + TILE / 2, y: row * TILE + TILE / 2, diamond: treasures.length % 3 === 0, phase: Math.random() * 6, seen: false });
   }
   found = 0;
   roundTime = 0;
@@ -188,6 +191,18 @@ function update(dt) {
       if (!blockedAt(nx, hero.y)) hero.x = nx;
       if (!blockedAt(hero.x, ny)) hero.y = ny;
     }
+  }
+  // Treasures are hidden until you are close. A detector beeps faster the closer you get.
+  var nearestHidden = Infinity;
+  treasures.forEach(function (t) {
+    var d = distance(t.x, t.y, hero.x, hero.y);
+    if (!t.seen && d < REVEAL_DISTANCE) { t.seen = true; sfx("pop"); floaters.push({ words: "Fundet! 👀", x: t.x, y: t.y - 40, life: 0.9 }); }
+    if (!t.seen) nearestHidden = Math.min(nearestHidden, d);
+  });
+  detectorTimer -= dt;
+  if (nearestHidden < DETECTOR_RANGE && detectorTimer <= 0) {
+    beep(500 + (1 - nearestHidden / DETECTOR_RANGE) * 700, 0.05);
+    detectorTimer = 0.15 + (nearestHidden / DETECTOR_RANGE) * 1.1;
   }
   for (var i = treasures.length - 1; i >= 0; i--) {
     var t = treasures[i];
@@ -275,11 +290,18 @@ function draw() {
   drawMap();
   PROPS.forEach(function (p) { emoji(p.emoji, p.col * TILE + TILE / 2, p.row * TILE + TILE / 2, 70); });
   treasures.forEach(function (t) {
+    if (!t.seen) return;
     var bob = Math.sin(sparkle * 3 + t.phase) * 4;
     if (t.diamond) emoji("💎", t.x, t.y + bob, 40);
     else drawGold(t.x, t.y + bob);
     if (Math.sin(sparkle * 5 + t.phase) > 0.85) emoji("✨", t.x + 16, t.y - 18 + bob, 22);
   });
+  var closest = Infinity;
+  treasures.forEach(function (t) { if (!t.seen) closest = Math.min(closest, distance(t.x, t.y, hero.x, hero.y)); });
+  if (closest < DETECTOR_RANGE) {
+    var heat = 1 - closest / DETECTOR_RANGE;
+    circle(hero.x, hero.y, 36 + heat * 20, "rgba(255,212,59," + (0.15 + heat * 0.35).toFixed(2) + ")");
+  }
   emoji("🧒", hero.x, hero.y, 50);
   drawHint();
   floaters.forEach(function (f) { text(f.words, f.x, f.y, 28, "#fff"); });
@@ -292,7 +314,10 @@ function draw() {
   text(player().emoji + " 💰 " + total, WIDTH - 125, top + 91, 24, "#ffd43b");
   box(WIDTH - 230, top + 126, 210, 64, "#5c7cfa");
   text("🏆 Rekorder", WIDTH - 125, top + 158, 22);
-  if (!steering && found === 0 && roundTime < 6) text("👆 Hold fingeren der, hvor du vil gå hen", WIDTH / 2, HEIGHT - 60, 24, "#fff");
+  if (!steering && found === 0 && roundTime < 8) {
+    text("👆 Hold fingeren der, hvor du vil gå hen", WIDTH / 2, HEIGHT - 90, 24, "#fff");
+    text("🔊 Skattene er gemt — bip-lyden bliver hurtigere, når du er tæt på!", WIDTH / 2, HEIGHT - 50, 20, "#ffe066");
+  }
 
   if (done) {
     var cx = WIDTH / 2, cy = HEIGHT / 2;
