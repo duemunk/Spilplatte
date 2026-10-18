@@ -111,13 +111,19 @@ var scene = "basement";
 var portal = null;
 var strength = 0;
 var STRENGTH_PER_LEVEL = 3;
-var TAPS_PER_SET = 12;
+// Each exercise is a finger movement: up-down for weights, circles for the bike,
+// side to side for gymnastics. REPS_PER_SET movements finish a set and add strength.
 var STATIONS = [
-  { emoji: "🏋️", name: "Vægte", color: "#e8590c" },
-  { emoji: "🚴", name: "Cykel", color: "#1c7ed6" },
-  { emoji: "🤸", name: "Gymnastik", color: "#2f9e44" }
+  { emoji: "🏋️", name: "Vægte", color: "#e8590c", move: "updown", help: "Stryg op og ned ⬆️⬇️" },
+  { emoji: "🚴", name: "Cykel", color: "#1c7ed6", move: "circle", help: "Tegn cirkler rundt 🔄" },
+  { emoji: "🤸", name: "Gymnastik", color: "#2f9e44", move: "sideways", help: "Stryg fra side til side ⬅️➡️" }
 ];
-var stationTaps = [0, 0, 0];
+var REPS_PER_SET = 8;
+var SWIPE = 110;
+var station = null;
+var reps = 0;
+var gesture = null;
+var repPop = 0;
 var flex = 0;
 
 function digsNeeded() { return Math.max(1, DIGS_NEEDED - Math.floor(strength / STRENGTH_PER_LEVEL)); }
@@ -207,6 +213,7 @@ function update(dt) {
     if (dirt[q].life <= 0) dirt.splice(q, 1);
   }
   flex = Math.max(0, flex - dt);
+  repPop = Math.max(0, repPop - dt);
   if (done || scene === "gym") return;
   roundTime += dt;
   sinceFind += dt;
@@ -305,55 +312,135 @@ function stationRect(i) {
 
 function backButton() { return { x: WIDTH / 2 - 180, y: HEIGHT - 130, w: 360, h: 100 }; }
 
-function drawGym() {
-  clear("#2b2d42");
-  for (var y = 0; y < HEIGHT; y += 80) box(0, y, WIDTH, 40, "rgba(255,255,255,0.03)");
-  var top = Math.max(RESERVED.h + 20, 30);
-  text("💪 Fitnesscenter", WIDTH / 2, top + 20, 44, "#ffd43b");
-  text("Styrke: " + strength + "  ·  Du graver med " + digsNeeded() + " slag ⛏️", WIDTH / 2, top + 75, 26, "#fff");
-  var toNext = STRENGTH_PER_LEVEL - (strength % STRENGTH_PER_LEVEL);
-  text(digsNeeded() > 1 ? "Træn " + toNext + " gang" + (toNext > 1 ? "e" : "") + " mere for at grave hurtigere" : "Du er SUPER stærk! 🦾", WIDTH / 2, top + 110, 20, "#cfd3dc");
+function exerciseCenter() { return { x: WIDTH / 2, y: Math.max(Math.max(RESERVED.h + 20, 30) + 270, HEIGHT / 2) }; }
+
+function drawGymMenu(top) {
+  text("Vælg hvad du vil træne", WIDTH / 2, top + 150, 24, "#fff");
   STATIONS.forEach(function (st, i) {
     var r = stationRect(i);
     box(r.x, r.y + 6, r.w, r.h, "rgba(0,0,0,0.3)");
     box(r.x, r.y, r.w, r.h, st.color);
-    var bounce = stationTaps[i] % 2 ? -10 : 0;
-    emoji(st.emoji, r.x + r.w / 2, r.y + r.h * 0.38 + bounce, Math.min(110, r.h * 0.45));
-    text(st.name, r.x + r.w / 2, r.y + r.h * 0.7, 26);
-    box(r.x + 20, r.y + r.h - 34, r.w - 40, 16, "rgba(0,0,0,0.3)");
-    box(r.x + 20, r.y + r.h - 34, (r.w - 40) * stationTaps[i] / TAPS_PER_SET, 16, "#ffd43b");
+    emoji(st.emoji, r.x + r.w / 2, r.y + r.h * 0.4, Math.min(110, r.h * 0.45));
+    text(st.name, r.x + r.w / 2, r.y + r.h * 0.75, 28);
   });
+}
+
+function drawExercise(top) {
+  var st = STATIONS[station];
+  var c = exerciseCenter();
+  text(st.emoji + " " + st.name, WIDTH / 2, top + 20, 40, "#ffd43b");
+  text(st.help, WIDTH / 2, top + 64, 26, "#fff");
+  text("Styrke: " + strength + "  ·  graver med " + digsNeeded() + " slag ⛏️", WIDTH / 2, top + 100, 20, "#cfd3dc");
+  var t = sparkle;
+  if (st.move === "updown") {
+    var lift = gesture ? Math.max(-90, Math.min(90, gesture.y - gesture.anchor)) : Math.sin(t * 3) * 40;
+    text("⬆️", c.x + 170, c.y - 80, 56);
+    text("⬇️", c.x + 170, c.y + 80, 56);
+    emoji(st.emoji, c.x, c.y + lift * 0.6, 150);
+  } else if (st.move === "circle") {
+    ctx.strokeStyle = "rgba(255,255,255,0.3)";
+    ctx.lineWidth = 24;
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, 140, 0, Math.PI * 2);
+    ctx.stroke();
+    var angle = gesture ? gesture.angle : t * 2;
+    circle(c.x + Math.cos(angle) * 140, c.y + Math.sin(angle) * 140, 26, "#ffd43b");
+    emoji(st.emoji, c.x, c.y, 130);
+  } else {
+    var lean = gesture ? Math.max(-120, Math.min(120, gesture.x - gesture.anchor)) : Math.sin(t * 3) * 60;
+    text("⬅️", c.x - 200, c.y + 100, 56);
+    text("➡️", c.x + 200, c.y + 100, 56);
+    emoji(st.emoji, c.x + lean * 0.6, c.y, 150);
+  }
+  if (repPop > 0) text("+1 💪", c.x - 160, c.y - 100 - (0.5 - repPop) * 60, 36, "#ffd43b");
+  var barW = Math.min(500, WIDTH - 80);
+  box(WIDTH / 2 - barW / 2, c.y + 185, barW, 30, "rgba(0,0,0,0.35)");
+  box(WIDTH / 2 - barW / 2, c.y + 185, barW * reps / REPS_PER_SET, 30, "#ffd43b");
+  text(reps + " / " + REPS_PER_SET, WIDTH / 2, c.y + 200, 22, "#222");
+}
+
+function drawGym() {
+  clear("#2b2d42");
+  for (var y = 0; y < HEIGHT; y += 80) box(0, y, WIDTH, 40, "rgba(255,255,255,0.03)");
+  var top = Math.max(RESERVED.h + 20, 30);
+  if (station === null) {
+    text("💪 Fitnesscenter", WIDTH / 2, top + 20, 44, "#ffd43b");
+    text("Styrke: " + strength + "  ·  Du graver med " + digsNeeded() + " slag ⛏️", WIDTH / 2, top + 70, 24, "#fff");
+    var toNext = STRENGTH_PER_LEVEL - (strength % STRENGTH_PER_LEVEL);
+    text(digsNeeded() > 1 ? "Træn " + toNext + " gang" + (toNext > 1 ? "e" : "") + " mere for at grave hurtigere" : "Du er SUPER stærk! 🦾", WIDTH / 2, top + 104, 20, "#cfd3dc");
+    drawGymMenu(top);
+  } else {
+    drawExercise(top);
+  }
   if (flex > 0) emoji("💪", WIDTH / 2, HEIGHT / 2, 120 + flex * 80);
   var back = backButton();
   box(back.x, back.y + 6, back.w, back.h, "rgba(0,0,0,0.3)");
   box(back.x, back.y, back.w, back.h, "#7048e8");
-  text("🌀 Tilbage til kælderen", back.x + back.w / 2, back.y + back.h / 2, 26);
-  text("👆 Tryk hurtigt på en maskine for at træne", WIDTH / 2, back.y - 30, 20, "#cfd3dc");
+  text(station === null ? "🌀 Tilbage til kælderen" : "⬅️ Vælg en anden øvelse", back.x + back.w / 2, back.y + back.h / 2, 26);
 }
 
-function tapGym(x, y) {
+function finishRep() {
+  reps++;
+  repPop = 0.5;
+  sfx("klik");
+  if (reps >= REPS_PER_SET) {
+    reps = 0;
+    var before = digsNeeded();
+    strength++;
+    playerSave("strength", strength);
+    flex = 0.8;
+    sfx(digsNeeded() < before ? "sejr" : "hop");
+  }
+}
+
+function gymStart(x, y) {
   var back = backButton();
   if (x > back.x && x < back.x + back.w && y > back.y && y < back.y + back.h) {
+    if (station !== null) { station = null; reps = 0; sfx("klik"); return; }
     scene = "basement";
     if (portal) { hero.x = portal.x + 70; hero.y = portal.y; if (blockedAt(hero.x, hero.y)) { hero.x = portal.x; hero.y = portal.y + 70; } }
     portal = null;
     sfx("boing");
     return;
   }
-  STATIONS.forEach(function (st, i) {
-    var r = stationRect(i);
-    if (x < r.x || x > r.x + r.w || y < r.y || y > r.y + r.h) return;
-    stationTaps[i]++;
-    sfx("klik");
-    if (stationTaps[i] >= TAPS_PER_SET) {
-      stationTaps[i] = 0;
-      var before = digsNeeded();
-      strength++;
-      playerSave("strength", strength);
-      flex = 0.8;
-      sfx(digsNeeded() < before ? "sejr" : "hop");
-    }
-  });
+  if (station === null) {
+    STATIONS.forEach(function (st, i) {
+      var r = stationRect(i);
+      if (x > r.x && x < r.x + r.w && y > r.y && y < r.y + r.h) { station = i; reps = 0; sfx("klik"); }
+    });
+    return;
+  }
+  var c = exerciseCenter();
+  var move = STATIONS[station].move;
+  gesture = { x: x, y: y, anchor: move === "sideways" ? x : y, expect: 0, angle: Math.atan2(y - c.y, x - c.x), turned: 0 };
+}
+
+function gymDrag(x, y) {
+  if (!gesture || station === null) return;
+  var move = STATIONS[station].move;
+  gesture.x = x;
+  gesture.y = y;
+  if (move === "circle") {
+    var c = exerciseCenter();
+    var angle = Math.atan2(y - c.y, x - c.x);
+    var delta = Math.atan2(Math.sin(angle - gesture.angle), Math.cos(angle - gesture.angle));
+    gesture.angle = angle;
+    gesture.turned += delta;
+    if (Math.abs(gesture.turned) >= Math.PI * 2) { gesture.turned = 0; finishRep(); }
+    return;
+  }
+  var value = move === "sideways" ? x : y;
+  if (gesture.expect === 0) {
+    if (Math.abs(value - gesture.anchor) > SWIPE) { gesture.expect = value < gesture.anchor ? 1 : -1; gesture.anchor = value; }
+    return;
+  }
+  if (gesture.expect === 1) {
+    if (value < gesture.anchor) gesture.anchor = value;
+    else if (value - gesture.anchor > SWIPE) { finishRep(); gesture.expect = -1; gesture.anchor = value; }
+  } else {
+    if (value > gesture.anchor) gesture.anchor = value;
+    else if (gesture.anchor - value > SWIPE) { finishRep(); gesture.expect = 1; gesture.anchor = value; }
+  }
 }
 
 function digButton() {
@@ -516,7 +603,7 @@ function draw() {
 }
 
 function onTap(x, y) {
-  if (scene === "gym") { tapGym(x, y); return; }
+  if (scene === "gym") { gymStart(x, y); return; }
   if (done) {
     if (Math.abs(x - WIDTH / 2) < 150 && y > HEIGHT / 2 + 40 && y < HEIGHT / 2 + 130) { startRound(); sfx("klik"); }
     return;
@@ -534,5 +621,8 @@ function onTap(x, y) {
   steering = { x: x, y: y };
 }
 
-function onDrag(x, y) { if (steering) { steering.x = x; steering.y = y; } }
-function onRelease() { steering = null; }
+function onDrag(x, y) {
+  if (scene === "gym") { gymDrag(x, y); return; }
+  if (steering) { steering.x = x; steering.y = y; }
+}
+function onRelease() { steering = null; gesture = null; }
