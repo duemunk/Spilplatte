@@ -234,7 +234,12 @@ function update(dt) {
     beep(500 + (1 - nearestHidden / DETECTOR_RANGE) * 700, 0.05);
     detectorTimer = 0.15 + (nearestHidden / DETECTOR_RANGE) * 1.1;
   }
-  if (portal && distance(portal.x, portal.y, hero.x, hero.y) < 45) { scene = "gym"; steering = null; sfx("boing"); }
+  if (portal && portal.pull !== undefined) {
+    portal.pull -= dt;
+    hero.x += (portal.x - hero.x) * Math.min(1, dt * 8);
+    hero.y += (portal.y - hero.y) * Math.min(1, dt * 8);
+    if (portal.pull <= 0) { delete portal.pull; scene = "gym"; sfx("boing"); }
+  } else if (portal && distance(portal.x, portal.y, hero.x, hero.y) < 45) { scene = "gym"; steering = null; sfx("boing"); }
   camera.x = WORLD_W <= WIDTH ? (WORLD_W - WIDTH) / 2 : Math.max(0, Math.min(WORLD_W - WIDTH, hero.x - WIDTH / 2));
   camera.y = WORLD_H <= HEIGHT ? (WORLD_H - HEIGHT) / 2 : Math.max(0, Math.min(WORLD_H - HEIGHT, hero.y - HEIGHT / 2));
 }
@@ -470,7 +475,7 @@ function draw() {
     var heat = 1 - closest / DETECTOR_RANGE;
     circle(hero.x, hero.y, 36 + heat * 20, "rgba(255,212,59," + (0.15 + heat * 0.35).toFixed(2) + ")");
   }
-  if (portal) drawPortal(portal.x, portal.y, 46);
+  if (portal) drawPortal(portal.x, portal.y, portal.pull !== undefined ? 46 + (0.7 - portal.pull) * 60 : 46);
   emoji("🧒", hero.x, hero.y, 50);
   drawHint();
   floaters.forEach(function (f) { text(f.words, f.x, f.y, 28, "#fff"); });
@@ -487,7 +492,7 @@ function draw() {
   circle(pb.x + pb.w / 2, pb.y + pb.h / 2 + 6, pb.w / 2, "rgba(0,0,0,0.3)");
   circle(pb.x + pb.w / 2, pb.y + pb.h / 2, pb.w / 2, portal ? "#9775fa" : "#7048e8");
   text("🌀", pb.x + pb.w / 2, pb.y + pb.h / 2 - 16, 56);
-  text(portal ? "Gå ind!" : "Portal", pb.x + pb.w / 2, pb.y + pb.h / 2 + 44, 24);
+  text("Træning", pb.x + pb.w / 2, pb.y + pb.h / 2 + 44, 24);
   var b = digButton();
   var onMound = treasures.some(function (t) { return t.seen && distance(t.x, t.y, hero.x, hero.y) < DIG_REACH; });
   circle(b.x + b.w / 2, b.y + b.h / 2 + 6, b.w / 2, "rgba(0,0,0,0.3)");
@@ -522,7 +527,8 @@ function onTap(x, y) {
   if (distance(x, y, b.x + b.w / 2, b.y + b.h / 2) < b.w / 2) { dig(); return; }
   var pb = portalButton();
   if (distance(x, y, pb.x + pb.w / 2, pb.y + pb.h / 2) < pb.w / 2) {
-    if (portal) { scene = "gym"; steering = null; sfx("boing"); } else openPortal();
+    if (!portal) openPortal();
+    if (portal) { portal.pull = 0.7; steering = null; }
     return;
   }
   steering = { x: x, y: y };
