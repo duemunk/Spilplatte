@@ -28,6 +28,10 @@ iPad; the engine caches emoji/text as bitmaps. Games must keep drawing cheap:
 - Images: small PNGs (under ~512 px, few hundred KB total per game); scale them down before
   adding. Sounds: short, compressed (`.m4a`/`.mp3`).
 - Move things by `speed * dt` so the game behaves the same at lower frame rates.
+- Count fills per frame, not just objects: aim for roughly 150 `box`/`circle` calls and only a
+  few dozen see-through (`rgba`) ones. Draw tile maps as runs of same-coloured tiles (one
+  rectangle per run, computed once), grid lines as full-length lines, and skip anything
+  off-screen. Desktop Chrome hides this cost — the A7 GPU does not.
 
 ## Fonts
 Games use fun fonts. Pick one at the top of `game.js` with `useFont("<name>")`; `text()` then
